@@ -29,4 +29,4 @@ Reduce friction when recording a working set by suggesting the weight and weight
 ## Delivery
 
 - Branch: `feature/smart-set-entry`
-- Pull request: pending creation
+- Pull request: [#3](https://github.com/Miike886/PersonalGymRegistry/pull/3) — open
