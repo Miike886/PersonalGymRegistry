@@ -29,4 +29,4 @@ Provide the first mobile-first vertical slice for recording personal gym session
 ## Delivery
 
 - Branch: `feature/initial-gym-session-tracker`
-- Pull request: pending creation
+- Pull request: [#1](https://github.com/Miike886/PersonalGymRegistry/pull/1) — open
