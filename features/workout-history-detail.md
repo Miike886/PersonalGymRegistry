@@ -27,4 +27,4 @@ Allow completed gym sessions to be opened from history and reviewed without modi
 ## Delivery
 
 - Branch: `feature/workout-history-detail`
-- Pull request: pending creation
+- Pull request: [#2](https://github.com/Miike886/PersonalGymRegistry/pull/2) — open
