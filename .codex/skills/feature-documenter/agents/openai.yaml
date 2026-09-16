@@ -1,0 +1,3 @@
+interface:
+  display_name: "Feature Documenter"
+  short_description: "Keep one current document per feature and pull request"
