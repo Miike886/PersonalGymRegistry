@@ -39,3 +39,27 @@ def test_completed_workout_detail_includes_sets_and_notes():
     assert response.status_code == 200
     assert response.json()['notes'] == 'Buen ritmo'
     assert response.json()['exercises'][0]['sets'][0]['reps'] == 10
+
+
+def test_last_workout_returns_latest_completed_workout_with_sets():
+    with TestClient(app) as client:
+        db = SessionLocal()
+        db.query(WorkoutSet).delete(); db.query(WorkoutExercise).delete(); db.query(Workout).delete()
+        db.query(Exercise).filter(Exercise.name == "Exercise last workout test").delete()
+        db.query(Routine).filter(Routine.name == "LAST_WORKOUT_TEST").delete(); db.commit()
+        routine = Routine(name="LAST_WORKOUT_TEST"); exercise = Exercise(name="Exercise last workout test")
+        db.add_all([routine, exercise]); db.flush()
+        started = datetime.now(timezone.utc) - timedelta(days=1)
+        workout = Workout(routine_id=routine.id, started_at=started, ended_at=started + timedelta(minutes=45))
+        db.add(workout); db.flush()
+        item = WorkoutExercise(workout_id=workout.id, exercise_id=exercise.id, exercise_name_snapshot=exercise.name, position=1)
+        db.add(item); db.flush()
+        db.add(WorkoutSet(workout_exercise_id=item.id, position=1, reps=8, load_value=50, set_type="WORKING"))
+        db.commit()
+        workout_id = workout.id
+        response = client.get(f'/routines/{routine.id}/last-workout')
+        db.close()
+
+    assert response.status_code == 200
+    assert response.json()['id'] == workout_id
+    assert response.json()['exercises'][0]['sets'][0]['load_value'] == 50
