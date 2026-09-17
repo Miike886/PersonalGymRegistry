@@ -24,7 +24,7 @@ Reduce friction when recording a working set by suggesting the weight and weight
 ## Verification
 
 - `cd backend && uv run pytest -q` passes (3 tests).
-- Frontend build is pending because Node/npm is unavailable in the local environment.
+- `cd frontend && npm run build` passes and generates the PWA bundle.
 
 ## Delivery
 
