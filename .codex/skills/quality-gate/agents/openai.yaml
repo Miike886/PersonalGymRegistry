@@ -1,0 +1,4 @@
+interface:
+  display_name: "Quality Gate"
+  short_description: "Review feature quality before merge"
+  default_prompt: "Use $quality-gate to review this feature pull request before merge."
