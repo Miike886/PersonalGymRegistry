@@ -28,6 +28,8 @@ app.add_middleware(CORSMiddleware, allow_origins=[origin.strip() for origin in s
 app.add_middleware(TrustedHostMiddleware, allowed_hosts=[host.strip() for host in settings.allowed_hosts.split(",")])
 @app.middleware("http")
 async def token_guard(request: Request, call_next):
+    if request.method == "OPTIONS":
+        return await call_next(request)
     if settings.app_env == "production" and request.url.path != "/health" and (not settings.api_token or request.headers.get("X-App-Token") != settings.api_token): return JSONResponse(status_code=401, content={"detail":"No autorizado"})
     return await call_next(request)
 
