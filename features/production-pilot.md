@@ -26,4 +26,4 @@ Prepare the application for a private personal deployment without adding user ac
 ## Delivery
 
 - Branch: `feature/production-pilot`
-- Pull request: pending creation
+- Pull request: [#6](https://github.com/Miike886/PersonalGymRegistry/pull/6) — open
