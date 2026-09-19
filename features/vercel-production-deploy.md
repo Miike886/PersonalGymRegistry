@@ -10,6 +10,7 @@ Make the frontend and FastAPI backend independently deployable to Vercel with Ne
 - `backend/api/index.py` exposes the FastAPI application as a Vercel Python Function.
 - `backend/vercel.json` routes backend traffic to that function and excludes non-runtime files.
 - Production CORS preflight requests bypass the application-token guard, while API requests still require the token.
+- GitHub Actions validates backend tests and the frontend production build on pull requests and updates to `main`.
 
 ## Deployment
 
