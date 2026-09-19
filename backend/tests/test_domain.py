@@ -3,12 +3,29 @@ os.environ["DATABASE_URL"]="sqlite:///./test_gym.db"
 from datetime import datetime, timedelta, timezone
 from fastapi.testclient import TestClient
 from app.database import SessionLocal
+from app.config import settings
 from app.main import app
 from app.models import Exercise, Routine, Workout, WorkoutExercise, WorkoutSet
 
 def test_health():
     with TestClient(app) as client:
         assert client.get('/health').json() == {'status':'ok'}
+
+
+def test_production_cors_preflight_skips_token_guard(monkeypatch):
+    monkeypatch.setattr(settings, "app_env", "production")
+    monkeypatch.setattr(settings, "api_token", "quality-gate-token")
+
+    with TestClient(app) as client:
+        unauthorized = client.get('/routines')
+        preflight = client.options('/routines', headers={
+            'Origin': 'http://localhost:5173',
+            'Access-Control-Request-Method': 'GET',
+        })
+
+    assert unauthorized.status_code == 401
+    assert preflight.status_code == 200
+    assert preflight.headers['access-control-allow-origin'] == 'http://localhost:5173'
 
 
 def test_completed_workout_detail_includes_sets_and_notes():
