@@ -21,3 +21,9 @@ La interfaz queda disponible en `http://localhost:5173` y la documentación de l
 - Manifiesto PWA y diseño mobile-first.
 
 > En una instalación nueva usa Alembic como fuente de esquema. `create_all` en el arranque existe solo para facilitar pruebas locales ligeras.
+
+## Piloto de producción
+
+Configura `APP_ENV=production`, `DATABASE_URL`, `API_TOKEN`, `CORS_ORIGINS`, `VITE_API_URL` y `VITE_API_TOKEN` en los entornos de despliegue. Ejecuta `uv run alembic upgrade head` y `uv run python seed.py` explícitamente contra la base de Neon antes de iniciar la API. En producción el backend no crea tablas automáticamente.
+
+El token compartido protege un piloto personal, pero no sustituye autenticación de usuarios para una API pública.
