@@ -22,4 +22,4 @@ Create two Vercel projects from this repository: set root directory to `frontend
 ## Delivery
 
 - Branch: `feature/vercel-production-deploy-final`
-- Pull request: pending creation
+- Pull request: [#7](https://github.com/Miike886/PersonalGymRegistry/pull/7) — open
