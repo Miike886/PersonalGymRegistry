@@ -6,6 +6,7 @@ class Settings(BaseSettings):
     app_env: str = "development"
     api_token: str | None = None
     cors_origins: str = "http://localhost:5173"
+    allowed_hosts: str = "localhost,127.0.0.1,testserver"
     model_config = SettingsConfigDict(env_file="../.env", extra="ignore")
 
 

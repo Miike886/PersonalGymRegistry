@@ -1,6 +1,7 @@
 from contextlib import asynccontextmanager
 from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session, joinedload
@@ -22,11 +23,12 @@ async def lifespan(app: FastAPI):
     if settings.app_env != "production": Base.metadata.create_all(engine)
     yield
 
-app = FastAPI(title="Gym Session Tracker", lifespan=lifespan)
+app = FastAPI(title="Gym Session Tracker", lifespan=lifespan, docs_url=None if settings.app_env == "production" else "/docs")
 app.add_middleware(CORSMiddleware, allow_origins=[origin.strip() for origin in settings.cors_origins.split(",")], allow_methods=["*"], allow_headers=["*"])
+app.add_middleware(TrustedHostMiddleware, allowed_hosts=[host.strip() for host in settings.allowed_hosts.split(",")])
 @app.middleware("http")
 async def token_guard(request: Request, call_next):
-    if settings.app_env == "production" and request.url.path != "/health" and request.headers.get("X-App-Token") != settings.api_token: return JSONResponse(status_code=401, content={"detail":"No autorizado"})
+    if settings.app_env == "production" and request.url.path != "/health" and (not settings.api_token or request.headers.get("X-App-Token") != settings.api_token): return JSONResponse(status_code=401, content={"detail":"No autorizado"})
     return await call_next(request)
 
 @app.get("/health")
