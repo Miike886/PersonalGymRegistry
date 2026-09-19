@@ -23,4 +23,4 @@ Make the active workout practical for daily use with real routines, corrections,
 ## Delivery
 
 - Branch: `feature/complete-session-mvp`
-- Pull request: pending creation
+- Pull request: [#5](https://github.com/Miike886/PersonalGymRegistry/pull/5) — open
