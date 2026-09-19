@@ -1,9 +1,11 @@
 from contextlib import asynccontextmanager
-from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy import select
+from fastapi.responses import JSONResponse
+from sqlalchemy import select, text
 from sqlalchemy.orm import Session, joinedload
 from .database import Base, engine, get_db
+from .config import settings
 from .models import Exercise, Routine, RoutineExercise, Workout, WorkoutExercise, WorkoutSet
 from .schemas import (ExerciseOut, RoutineOut, SetCreate, SetOut, SetUpdate, WorkoutCreate, WorkoutExerciseCreate, WorkoutExerciseOut, WorkoutExerciseUpdate, WorkoutOut)
 
@@ -17,14 +19,19 @@ def workout_or_404(db: Session, workout_id: int):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    Base.metadata.create_all(engine)  # convenient first run; production uses Alembic
+    if settings.app_env != "production": Base.metadata.create_all(engine)
     yield
 
 app = FastAPI(title="Gym Session Tracker", lifespan=lifespan)
-app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:5173"], allow_methods=["*"], allow_headers=["*"])
+app.add_middleware(CORSMiddleware, allow_origins=[origin.strip() for origin in settings.cors_origins.split(",")], allow_methods=["*"], allow_headers=["*"])
+@app.middleware("http")
+async def token_guard(request: Request, call_next):
+    if settings.app_env == "production" and request.url.path != "/health" and request.headers.get("X-App-Token") != settings.api_token: return JSONResponse(status_code=401, content={"detail":"No autorizado"})
+    return await call_next(request)
 
 @app.get("/health")
-def health(): return {"status":"ok"}
+def health(db: Session = Depends(get_db)):
+    db.execute(text("SELECT 1")); return {"status":"ok"}
 
 @app.get("/routines", response_model=list[RoutineOut])
 def routines(db: Session = Depends(get_db)):

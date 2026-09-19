@@ -3,13 +3,14 @@ import { createRoot } from 'react-dom/client'
 import './style.css'
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+const API_TOKEN = import.meta.env.VITE_API_TOKEN
 type WeightType = 'EXTERNAL'|'BODYWEIGHT'|'BODYWEIGHT_PLUS'|'BODYWEIGHT_ASSISTED'
 type WorkoutSet = { id:number; position:number; reps:number; load_value:number|null; weight_type:WeightType; set_type:string }
 type WorkoutExercise = { id:number; exercise_id:number|null; exercise_name_snapshot:string; position:number; skipped:boolean; sets:WorkoutSet[] }
 type Workout = { id:number; routine_id:number; started_at:string; ended_at:string|null; notes:string|null; routine:{name:string}; exercises:WorkoutExercise[] }
 type Exercise = { id:number; name:string; load_convention:'TOTAL'|'PER_HAND' }
 
-async function api(path:string, options:RequestInit = {}) { const response = await fetch(API + path, { headers:{ 'Content-Type':'application/json' }, ...options }); if (!response.ok) throw Error((await response.json().catch(() => ({ detail:'Error de conexión' }))).detail); return response.status === 204 ? null : response.json() }
+async function api(path:string, options:RequestInit = {}) { const response = await fetch(API + path, { headers:{ 'Content-Type':'application/json', ...(API_TOKEN ? {'X-App-Token':API_TOKEN} : {}) }, ...options }); if (!response.ok) throw Error((await response.json().catch(() => ({ detail:'Error de conexión' }))).detail); return response.status === 204 ? null : response.json() }
 function formatDate(date:string) { return new Intl.DateTimeFormat('es-MX', { weekday:'long', day:'numeric', month:'long', year:'numeric' }).format(new Date(date)) }
 function duration(workout:Workout) { if (!workout.ended_at) return ''; const minutes = Math.max(0, Math.round((new Date(workout.ended_at).getTime() - new Date(workout.started_at).getTime()) / 60000)); return minutes >= 60 ? [`${Math.floor(minutes / 60)} h`, minutes % 60 ? `${minutes % 60} min` : ''].filter(Boolean).join(' ') : `${minutes} min` }
 function weightLabel(type:WeightType) { return ({ EXTERNAL:'Carga externa', BODYWEIGHT:'Peso corporal', BODYWEIGHT_PLUS:'Peso corporal + carga', BODYWEIGHT_ASSISTED:'Peso corporal asistido' })[type] }
