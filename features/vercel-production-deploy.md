@@ -14,7 +14,7 @@ Make the frontend and FastAPI backend independently deployable to Vercel with Ne
 
 ## Deployment
 
-Create two Vercel projects from this repository: set root directory to `frontend` for the PWA and `backend` for the API. Configure production variables from `.env.example`, run Alembic and seed against Neon before sending traffic.
+Create two Vercel projects from this repository: set root directory to `frontend` for the PWA and `backend` for the API. Configure production variables from `.env.example`, then run `uv run alembic upgrade head` and `uv run python seed.py` from `backend` with `DATABASE_URL` set to the Neon connection URL. Alembic reads that environment variable rather than the local Docker URL in `alembic.ini`.
 
 ## Verification
 
