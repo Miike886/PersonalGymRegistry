@@ -17,13 +17,14 @@ def test_production_cors_preflight_skips_token_guard(monkeypatch):
     monkeypatch.setattr(settings, "api_token", "quality-gate-token")
 
     with TestClient(app) as client:
-        unauthorized = client.get('/routines')
+        unauthorized = client.get('/routines', headers={'Origin': 'http://localhost:5173'})
         preflight = client.options('/routines', headers={
             'Origin': 'http://localhost:5173',
             'Access-Control-Request-Method': 'GET',
         })
 
     assert unauthorized.status_code == 401
+    assert unauthorized.headers['access-control-allow-origin'] == 'http://localhost:5173'
     assert preflight.status_code == 200
     assert preflight.headers['access-control-allow-origin'] == 'http://localhost:5173'
 

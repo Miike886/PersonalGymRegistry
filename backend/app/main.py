@@ -24,14 +24,16 @@ async def lifespan(app: FastAPI):
     yield
 
 app = FastAPI(title="Gym Session Tracker", lifespan=lifespan, docs_url=None if settings.app_env == "production" else "/docs")
-app.add_middleware(CORSMiddleware, allow_origins=[origin.strip() for origin in settings.cors_origins.split(",")], allow_methods=["*"], allow_headers=["*"])
-app.add_middleware(TrustedHostMiddleware, allowed_hosts=[host.strip() for host in settings.allowed_hosts.split(",")])
 @app.middleware("http")
 async def token_guard(request: Request, call_next):
     if request.method == "OPTIONS":
         return await call_next(request)
     if settings.app_env == "production" and request.url.path != "/health" and (not settings.api_token or request.headers.get("X-App-Token") != settings.api_token): return JSONResponse(status_code=401, content={"detail":"No autorizado"})
     return await call_next(request)
+
+# Register CORS after the guard so it wraps all responses, including authorization failures.
+app.add_middleware(CORSMiddleware, allow_origins=[origin.strip() for origin in settings.cors_origins.split(",")], allow_methods=["*"], allow_headers=["*"])
+app.add_middleware(TrustedHostMiddleware, allowed_hosts=[host.strip() for host in settings.allowed_hosts.split(",")])
 
 @app.get("/health")
 def health(db: Session = Depends(get_db)):
