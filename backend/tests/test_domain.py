@@ -1,6 +1,7 @@
 import os
 os.environ["DATABASE_URL"]="sqlite:///./test_gym.db"
 from datetime import datetime, timedelta, timezone
+from uuid import uuid4
 from fastapi.testclient import TestClient
 from app.database import SessionLocal
 from app.config import settings
@@ -81,3 +82,51 @@ def test_last_workout_returns_latest_completed_workout_with_sets():
     assert response.status_code == 200
     assert response.json()['id'] == workout_id
     assert response.json()['exercises'][0]['sets'][0]['load_value'] == 50
+
+
+def test_active_and_completed_workouts_can_be_deleted_with_children():
+    unique = uuid4().hex[:8]
+    with TestClient(app) as client:
+        db = SessionLocal()
+        routine = Routine(name=f"DELETE_{unique}")
+        exercise = Exercise(name=f"Exercise delete {unique}")
+        db.add_all([routine, exercise]); db.flush()
+
+        active = Workout(routine_id=routine.id)
+        completed = Workout(
+            routine_id=routine.id,
+            ended_at=datetime.now(timezone.utc),
+        )
+        db.add_all([active, completed]); db.flush()
+        item = WorkoutExercise(
+            workout_id=active.id,
+            exercise_id=exercise.id,
+            exercise_name_snapshot=exercise.name,
+            position=1,
+        )
+        db.add(item); db.flush()
+        workout_set = WorkoutSet(
+            workout_exercise_id=item.id,
+            position=1,
+            reps=8,
+            load_value=40,
+            set_type="WORKING",
+        )
+        db.add(workout_set); db.commit()
+        active_id, completed_id = active.id, completed.id
+        item_id, set_id = item.id, workout_set.id
+
+        cancel_response = client.delete(f'/workouts/{active_id}')
+        delete_response = client.delete(f'/workouts/{completed_id}')
+        missing_response = client.delete(f'/workouts/{completed_id}')
+
+        db.expire_all()
+        assert cancel_response.status_code == 204
+        assert delete_response.status_code == 204
+        assert missing_response.status_code == 404
+        assert db.get(Workout, active_id) is None
+        assert db.get(Workout, completed_id) is None
+        assert db.get(WorkoutExercise, item_id) is None
+        assert db.get(WorkoutSet, set_id) is None
+
+        db.delete(routine); db.delete(exercise); db.commit(); db.close()

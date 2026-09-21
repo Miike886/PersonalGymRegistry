@@ -12,6 +12,7 @@ Use this skill whenever a change affects the Gym Session Tracker domain model, A
 ## Domain invariants
 
 - A `Workout` is active exactly when `ended_at` is `null`. There may be at most one active workout across the application. Closing the PWA never finishes it; finishing is always explicit.
+- Cancelling an active workout permanently deletes it and its recorded sets instead of adding it to completed history. Deleting a completed workout also removes its historical snapshot and must be an explicit, confirmed action.
 - A workout belongs to one `Routine`: `PUSH`, `PULL`, `LEGS`, or `FREE`. `FREE` begins without preloaded exercises.
 - Starting a workout copies the current `RoutineExercise` entries into `WorkoutExercise` records. Never use routine entries as the session's mutable state.
 - `WorkoutExercise.exercise_name_snapshot` is immutable historical data. Renaming or removing a catalog exercise must not rewrite prior workout names.
