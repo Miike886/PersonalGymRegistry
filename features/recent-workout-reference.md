@@ -34,4 +34,4 @@ Show the user's most relevant recent loads during an active workout without requ
 ## Delivery
 
 - Branch: `feature/recent-workout-reference`
-- Pull request: pending
+- Pull request: [#9](https://github.com/Miike886/PersonalGymRegistry/pull/9) — open
