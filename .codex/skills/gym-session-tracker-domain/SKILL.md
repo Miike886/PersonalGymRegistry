@@ -26,7 +26,7 @@ Use this skill whenever a change affects the Gym Session Tracker domain model, A
 - The backend is the source of truth. The frontend must reload and surface errors rather than silently losing a series.
 - Active-session recovery is required, not an optional cache feature.
 - The normal mobile flow is weight confirmation, repetitions entry, and one tap to record. Preserve the selected/preloaded weight after a set.
-- Last completed workout data is reference-only and must not mutate current records.
+- Recent completed workout data is reference-only, excludes active sessions, and must not mutate current records.
 
 ## Change workflow
 
