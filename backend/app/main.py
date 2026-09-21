@@ -1,5 +1,5 @@
 from contextlib import asynccontextmanager
-from fastapi import Depends, FastAPI, HTTPException, Request, status
+from fastapi import Depends, FastAPI, HTTPException, Query, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse
@@ -50,6 +50,16 @@ def exercises(db: Session = Depends(get_db)):
 @app.get("/routines/{routine_id}/last-workout", response_model=WorkoutOut | None)
 def last_workout(routine_id: int, db: Session = Depends(get_db)):
     return db.execute(select(Workout).where(Workout.routine_id == routine_id, Workout.ended_at.is_not(None)).options(*detail_options()).order_by(Workout.ended_at.desc())).unique().scalars().first()
+
+@app.get("/routines/{routine_id}/recent-workouts", response_model=list[WorkoutOut])
+def recent_workouts(routine_id: int, limit: int = Query(default=2, ge=1, le=10), db: Session = Depends(get_db)):
+    return db.execute(
+        select(Workout)
+        .where(Workout.routine_id == routine_id, Workout.ended_at.is_not(None))
+        .options(*detail_options())
+        .order_by(Workout.ended_at.desc(), Workout.id.desc())
+        .limit(limit)
+    ).unique().scalars().all()
 
 @app.get("/workouts/active", response_model=WorkoutOut | None)
 def active_workout(db: Session = Depends(get_db)):

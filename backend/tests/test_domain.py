@@ -130,3 +130,52 @@ def test_active_and_completed_workouts_can_be_deleted_with_children():
         assert db.get(WorkoutSet, set_id) is None
 
         db.delete(routine); db.delete(exercise); db.commit(); db.close()
+
+
+def test_recent_workouts_returns_latest_completed_for_routine_only():
+    unique = uuid4().hex[:8]
+    with TestClient(app) as client:
+        db = SessionLocal()
+        routine = Routine(name=f"RECENT_{unique}")
+        other_routine = Routine(name=f"OTHER_{unique}")
+        exercise = Exercise(name=f"Exercise recent {unique}")
+        db.add_all([routine, other_routine, exercise]); db.flush()
+
+        now = datetime.now(timezone.utc)
+        starts = [now - timedelta(days=3), now - timedelta(days=2), now - timedelta(days=1)]
+        completed = [Workout(routine_id=routine.id, started_at=started, ended_at=started + timedelta(minutes=45)) for started in starts]
+        other = Workout(routine_id=other_routine.id, started_at=now, ended_at=now)
+        active = Workout(routine_id=routine.id, started_at=now)
+        db.add_all([*completed, other, active]); db.flush()
+
+        latest_item = WorkoutExercise(
+            workout_id=completed[-1].id,
+            exercise_id=exercise.id,
+            exercise_name_snapshot=exercise.name,
+            position=1,
+        )
+        db.add(latest_item); db.flush()
+        db.add(WorkoutSet(
+            workout_exercise_id=latest_item.id,
+            position=1,
+            reps=6,
+            load_value=80,
+            set_type="WORKING",
+        ))
+        db.commit()
+        expected_ids = [completed[-1].id, completed[-2].id]
+
+        response = client.get(f'/routines/{routine.id}/recent-workouts')
+        invalid_limit = client.get(f'/routines/{routine.id}/recent-workouts?limit=0')
+
+        assert response.status_code == 200
+        assert [workout['id'] for workout in response.json()] == expected_ids
+        assert response.json()[0]['exercises'][0]['sets'][0]['load_value'] == 80
+        assert all(workout['ended_at'] is not None for workout in response.json())
+        assert invalid_limit.status_code == 422
+
+        for workout in [*completed, other, active]:
+            db.delete(workout)
+        db.commit()
+        db.delete(routine); db.delete(other_routine); db.delete(exercise)
+        db.commit(); db.close()
