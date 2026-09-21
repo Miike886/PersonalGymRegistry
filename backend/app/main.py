@@ -74,6 +74,12 @@ def workouts(db: Session = Depends(get_db)):
 @app.get("/workouts/{workout_id}", response_model=WorkoutOut)
 def get_workout(workout_id: int, db: Session = Depends(get_db)): return workout_or_404(db, workout_id)
 
+@app.delete("/workouts/{workout_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_workout(workout_id: int, db: Session = Depends(get_db)):
+    workout = db.get(Workout, workout_id)
+    if not workout: raise HTTPException(404, "Workout no encontrado")
+    db.delete(workout); db.commit()
+
 @app.post("/workouts/{workout_id}/exercises", response_model=WorkoutExerciseOut, status_code=201)
 def add_exercise(workout_id:int, body:WorkoutExerciseCreate, db:Session=Depends(get_db)):
     workout_or_404(db, workout_id); exercise=db.get(Exercise, body.exercise_id)
