@@ -32,4 +32,4 @@ Let the user discard an active workout or permanently remove an unwanted complet
 ## Delivery
 
 - Branch: `feature/workout-cancel-delete`
-- Pull request: pending
+- Pull request: [#8](https://github.com/Miike886/PersonalGymRegistry/pull/8) — open
