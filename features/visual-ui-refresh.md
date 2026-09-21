@@ -36,4 +36,4 @@ Give Gym Tracker a dark and lime visual identity and make long exercise names, d
 ## Delivery
 
 - Branch: `feature/visual-ui-refresh`
-- Pull request: pending.
+- Pull request: [#10](https://github.com/Miike886/PersonalGymRegistry/pull/10) — open.
