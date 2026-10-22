@@ -4,7 +4,7 @@ Ideas detectadas durante el uso real. Cada feature se definirá y entregará en 
 
 ## Navegación durante una sesión activa
 
-- Estado: pendiente.
+- Estado: implementada en PR #13; pendiente de aprobación.
 - Problema: una sesión iniciada ocupa toda la aplicación e impide volver a Inicio, Historial y detalles.
 - Permitir explorar las pantallas mientras la sesión continúa activa.
 - Mostrar una acción persistente y visible para retomar el entrenamiento en curso.
