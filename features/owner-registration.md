@@ -25,6 +25,6 @@
 
 - Verificado: 51 pruebas backend, incluidas migraciones con historial y protección de credenciales; build TypeScript/Vite/PWA; pruebas de modelos frontend y flujo real Edge/API/proxy. Registro móvil revisado a 375px; login/regresiones existentes en 320, 375, 430, 768 y 1440px.
 - El flujo real cubre confirmación y código incorrectos, creación con entrada inmediata, historial conservado, registro cerrado al salir, posterior login y persistencia de sesión. Base aislada temporal; sin modificar producción.
-- Revisión quality-gate pendiente de creación de PR.
+- Quality-gate: revisados título, descripción, archivos y diff de PR #20 contra su base; autorización, activación privada, exclusión de segunda cuenta, preservación del historial, migración, cookies y errores móviles. Sin hallazgos bloqueantes. Se protegió el downgrade para no eliminar credenciales y se serializó la lectura de credenciales de login con el registro; pruebas relevantes repetidas correctamente. CI remoto se comprueba al entregar.
 - Rama: feature/owner-registration; base: feature/session-interaction-polish (PR #19).
-- Pull request: pendiente de creación.
+- Pull request: [#20](https://github.com/Miike886/PersonalGymRegistry/pull/20), abierta; sin merge ni despliegue de producción.
