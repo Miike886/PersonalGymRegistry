@@ -25,6 +25,7 @@ Use this skill whenever a change affects the Gym Session Tracker domain model, A
 
 - The backend is the source of truth. The frontend must reload and surface errors rather than silently losing a series.
 - Active-session recovery is required, not an optional cache feature.
+- Browsing other screens while a workout is active must preserve the session, typed draft inputs and rest state; resuming does not create another workout.
 - Workout data is private to the single configured owner; all API reads and writes require a server-validated session. Logout or authentication expiry never finishes or cancels an active workout.
 - The normal mobile flow is weight confirmation, repetitions entry, and one tap to record. Preserve the selected/preloaded weight after a set.
 - Recent completed workout data is reference-only, excludes active sessions, and must not mutate current records.
