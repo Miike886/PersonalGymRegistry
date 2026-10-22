@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import './style.css'
+import { clearDrafts, readDraft, saveDraft, useWallClock, FloatingTimer } from './session-continuity'
 
 const API = '/api'
 type WeightType = 'EXTERNAL'|'BODYWEIGHT'|'BODYWEIGHT_PLUS'|'BODYWEIGHT_ASSISTED'
@@ -94,7 +95,7 @@ function App() {
   },[])
   const logout=async ()=>{
     setClosing(true)
-    try { await api('/auth/logout',{method:'POST'}); setOpened(false); setOwner(null); setNotice('') }
+    try { await api('/auth/logout',{method:'POST'}); clearDrafts(); window.dispatchEvent(new Event('gym:logout')); setOpened(false); setOwner(null); setNotice('') }
     catch(err) { setNotice(err instanceof Error ? err.message : 'No se pudo cerrar la sesión') }
     finally { setClosing(false) }
   }
@@ -113,9 +114,10 @@ function WorkoutApp({authVersion}:{authVersion:number}) {
   const initialLoad = useRef(true)
   const load = async () => { try { setError(''); const current=await api('/workouts/active'); setActive(current); if(initialLoad.current) { setView(current ? 'session' : 'home'); initialLoad.current=false } setRoutines(await api('/routines')); setHistory(await api('/workouts')) } catch (err:any) { setError(err.message) } }
   useEffect(() => { load() }, [authVersion])
+  useEffect(()=>{const resume=()=>{if(document.visibilityState==='visible')load()};window.addEventListener('focus',resume);window.addEventListener('pageshow',resume);document.addEventListener('visibilitychange',resume);return()=>{window.removeEventListener('focus',resume);window.removeEventListener('pageshow',resume);document.removeEventListener('visibilitychange',resume)}},[])
   const start = async (routineId:number) => { try { setActive(await api('/workouts', { method:'POST', body:JSON.stringify({ routine_id:routineId }) })); setView('session') } catch (err:any) { setError(err.message) } }
-  const finish = async () => { if (active && confirm('¿Finalizar entrenamiento?')) { await api(`/workouts/${active.id}/finish`, { method:'POST' }); setActive(null); setView('history'); load() } }
-  const cancelWorkout = async () => { if (active && confirm('¿Cancelar este entrenamiento? Se eliminarán todas las series registradas.')) { try { setError(''); await api(`/workouts/${active.id}`, { method:'DELETE' }); setActive(null); setView('home'); await load() } catch (err:any) { setError(err.message) } } }
+  const finish = async () => { if (active && confirm('¿Finalizar entrenamiento?')) { await api(`/workouts/${active.id}/finish`, { method:'POST' }); clearDrafts(active.id); setActive(null); setView('history'); load() } }
+  const cancelWorkout = async () => { if (active && confirm('¿Cancelar este entrenamiento? Se eliminarán todas las series registradas.')) { try { setError(''); await api(`/workouts/${active.id}`, { method:'DELETE' }); clearDrafts(active.id); setActive(null); setView('home'); await load() } catch (err:any) { setError(err.message) } } }
   const deleteWorkout = async (workout:Workout) => { if (confirm('¿Eliminar este entrenamiento del historial? Esta acción no se puede deshacer.')) { try { setError(''); await api(`/workouts/${workout.id}`, { method:'DELETE' }); setSelected(null); setView('history'); await load() } catch (err:any) { setError(err.message) } } }
   const openDetail = async (workoutId:number) => { try { setError(''); setLoadingDetail(true); setSelected(await api(`/workouts/${workoutId}`)); setView('detail') } catch (err:any) { setError(err.message) } finally { setLoadingDetail(false) } }
 
@@ -139,7 +141,8 @@ function WorkoutApp({authVersion}:{authVersion:number}) {
     </>}
     <footer className="page-footer"><Brand /><span>UNA SERIE A LA VEZ.</span></footer>
   </main>}</div>
-    {active && <div hidden={view!=='session'}><Session workout={active} refresh={load} finish={finish} cancelWorkout={cancelWorkout} error={error} browse={()=>setView('home')}/></div>}
+    {active && <div hidden={view!=='session'}><Session key={active.id} workout={active} refresh={load} finish={finish} cancelWorkout={cancelWorkout} error={error} browse={()=>setView('home')}/></div>}
+    {active && <FloatingTimer workout={active}/>}
     {active && view!=='session' && <button className="resume-session" onClick={()=>setView('session')}>● Retomar {active.routine.name} <span>Entrenamiento en curso ↗</span></button>}
   </>
 }
@@ -198,11 +201,13 @@ function ExercisePicker({catalog,choose,custom,close,draft,setDraft}:{catalog:Ex
 }
 
 function Session({ workout, refresh, finish, cancelWorkout, error, browse }:{ workout:Workout; refresh:() => Promise<void>; finish:() => void; cancelWorkout:() => void; error:string; browse:()=>void }) {
-  const [weights, setWeights] = useState<Record<number,string>>({}), [weightTypes, setWeightTypes] = useState<Record<number,WeightType>>({}), [reps, setReps] = useState(''), [warm, setWarm] = useState(false), [adding, setAdding] = useState(false), [catalog, setCatalog] = useState<Exercise[]>([]), [recent, setRecent] = useState<Workout[]>([]), [referenceError, setReferenceError] = useState(''), [now, setNow] = useState(Date.now())
+  const [draft]=useState(()=>readDraft(workout.id))
+  const [weights, setWeights] = useState<Record<number,string>>(draft.weights||{}), [weightTypes, setWeightTypes] = useState<Record<number,WeightType>>(draft.weightTypes||{}), [reps, setReps] = useState(draft.reps||''), [warm, setWarm] = useState(draft.warm||false), [adding, setAdding] = useState(false), [catalog, setCatalog] = useState<Exercise[]>([]), [recent, setRecent] = useState<Workout[]>([]), [referenceError, setReferenceError] = useState('')
+  const now=useWallClock()
 const loadReference = () => { setReferenceError(''); Promise.all([api(`/routines/${workout.routine_id}/recent-workouts?limit=2`), api('/exercises')]).then(([recentWorkouts, exercises]) => { setRecent(recentWorkouts); setCatalog(exercises); const previous = recentWorkouts[0], nextWeights:Record<number,string> = {}, nextTypes:Record<number,WeightType> = {}; workout.exercises.forEach(item => { const previousExercise = previous?.exercises.find((exercise:WorkoutExercise) => exercise.exercise_id === item.exercise_id); const suggestion = previousExercise?.sets.slice().reverse().find((set:WorkoutSet) => set.set_type === 'WORKING' && set.load_unit === 'lb'); if (suggestion) { if (suggestion.load_value != null) nextWeights[item.id] = String(suggestion.load_value); nextTypes[item.id] = suggestion.weight_type } }); setWeights(current => ({ ...nextWeights, ...current })); setWeightTypes(current => ({ ...nextTypes, ...current })) }).catch((err:any) => setReferenceError(err.message)) }
   useEffect(() => { loadReference() }, [workout.id])
-  useEffect(() => { const timer = window.setInterval(() => setNow(Date.now()), 1000); return () => window.clearInterval(timer) }, [])
-  const [customDraft,setCustomDraft]=useState<ExerciseDraft>({name:'',convention:'TOTAL'})
+  const [customDraft,setCustomDraft]=useState<ExerciseDraft>(draft.customDraft||{name:'',convention:'TOTAL'})
+  useEffect(()=>{saveDraft(workout.id,{weights,weightTypes,reps,warm,customDraft})},[workout.id,weights,weightTypes,reps,warm,customDraft])
   const reference = (item:WorkoutExercise) => { const found = recent[0]?.exercises.find(exercise => exercise.exercise_id === item.exercise_id); return found?.sets.slice().reverse().find(set => set.set_type === 'WORKING') }
   const exercise = (item:WorkoutExercise) => catalog.find(entry => entry.id === item.exercise_id)
   const convention = (item:WorkoutExercise) => exercise(item)?.load_convention === 'PER_HAND' ? 'lb por mano' : 'lb totales'

@@ -199,3 +199,4 @@ nav .nav-active{color:#101605;background:var(--lime);font-weight:700}
 .resume-session span{font-size:12px;font-weight:500}
 .auth-check{min-height:70vh;display:grid;place-content:center;gap:24px;color:var(--muted)}
 @media(max-width:768px){.login-layout{grid-template-columns:minmax(0,1fr);gap:32px;padding:32px 0}.login-intro h1{font-size:52px}.login-card{padding:24px 20px}.account-bar{padding:10px 16px 0}}
+.continuity-tools{max-width:1180px;margin:12px auto 24px;padding:0 24px;color:var(--muted);font-size:.85rem}.continuity-tools button{font-size:.85rem}.continuity-tools small{display:block;max-width:70ch;line-height:1.6}
