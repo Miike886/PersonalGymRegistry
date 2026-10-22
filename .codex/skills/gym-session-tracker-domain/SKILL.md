@@ -14,10 +14,11 @@ Use this skill whenever a change affects the Gym Session Tracker domain model, A
 - A `Workout` is active exactly when `ended_at` is `null`. There may be at most one active workout across the application. Closing the PWA never finishes it; finishing is always explicit.
 - Cancelling an active workout permanently deletes it and its recorded sets instead of adding it to completed history. Deleting a completed workout also removes its historical snapshot and must be an explicit, confirmed action.
 - A workout belongs to one `Routine`: `PUSH`, `PULL`, `LEGS`, or `FREE`. `FREE` begins without preloaded exercises.
+- Active FREE sessions may create named catalog exercises with a total/per-hand convention; names are normalized and copied into immutable session snapshots. Creation never changes a routine template.
 - Starting a workout copies the current `RoutineExercise` entries into `WorkoutExercise` records. Never use routine entries as the session's mutable state.
 - `WorkoutExercise.exercise_name_snapshot` is immutable historical data. Renaming or removing a catalog exercise must not rewrite prior workout names.
 - Workout exercises may be added, skipped, reordered, or omitted without changing the routine template. Preserve an explicit, stable position for exercises and for sets.
-- A `WorkoutSet` records positive `reps`; all loads are kilograms in V1. `load_value` is nullable for bodyweight work.
+- A `WorkoutSet` records positive `reps`; new loads default to pounds (lb), and each set retains its explicit kg/lb unit. Existing records retain kg without changing numeric values; never reinterpret or convert legacy loads without confirming their actual meaning. `load_value` is nullable for bodyweight work.
 - Load conventions describe the catalog exercise (`TOTAL` or `PER_HAND`). Weight types describe the recorded set (`EXTERNAL`, `BODYWEIGHT`, `BODYWEIGHT_PLUS`, `BODYWEIGHT_ASSISTED`); do not conflate them.
 - Sets distinguish `WORKING` from `WARMUP`. Do not introduce volume, PR, 1RM, charts, authentication, supersets, or offline sync unless explicitly requested.
 
@@ -25,9 +26,14 @@ Use this skill whenever a change affects the Gym Session Tracker domain model, A
 
 - The backend is the source of truth. The frontend must reload and surface errors rather than silently losing a series.
 - Active-session recovery is required, not an optional cache feature.
+- Read-only analytics use completed sessions and working sets. Separate canonical exercises, original load units and weight types; do not double per-hand loads or invent body mass/1RM. Assisted load is assistance, not weight lifted. Date filters and attendance use local start dates.
+- Every newly recorded set, including warmups, starts a 165-second rest deadline saved by the server in the same transaction. Editing/deleting sets does not restart rest. Skip and finish clear it; elapsed time derives from started_at, never accumulated browser ticks.
+- Browsing other screens while a workout is active must preserve the session, typed draft inputs and rest state; resuming does not create another workout.
 - Workout data is private to the single configured owner; all API reads and writes require a server-validated session. Logout or authentication expiry never finishes or cancels an active workout.
+- The sole owner may register once using a private server-configured activation code. Registration preserves existing workouts, revokes prior sessions, and permanently closes further registration while the account exists. Stored owner credentials take precedence over legacy environment credentials; never expose an unguarded claim of existing history.
 - The normal mobile flow is weight confirmation, repetitions entry, and one tap to record. Preserve the selected/preloaded weight after a set.
 - Recent completed workout data is reference-only, excludes active sessions, and must not mutate current records.
+- Completed session contents are read-only in the API as well as UI; set edits/deletion and exercise reordering/skipping reject completed workouts. Explicit confirmed deletion of the whole workout remains allowed.
 
 ## Change workflow
 

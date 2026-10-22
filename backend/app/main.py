@@ -1,8 +1,10 @@
 from contextlib import asynccontextmanager
+from datetime import datetime, timedelta, timezone
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
-from sqlalchemy import select, text
+from sqlalchemy import select, text, func
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 from .database import Base, engine, get_db
 from .config import settings
@@ -99,7 +101,21 @@ def delete_workout(workout_id: int, db: Session = Depends(get_db)):
 
 @app.post("/workouts/{workout_id}/exercises", response_model=WorkoutExerciseOut, status_code=201)
 def add_exercise(workout_id:int, body:WorkoutExerciseCreate, db:Session=Depends(get_db)):
-    workout_or_404(db, workout_id); exercise=db.get(Exercise, body.exercise_id)
+    workout=workout_or_404(db, workout_id)
+    if workout.ended_at: raise HTTPException(409,"La sesión ya terminó")
+    if body.name is not None:
+        if workout.routine.name != "FREE": raise HTTPException(422,"Los ejercicios por nombre se agregan desde una sesión libre")
+        exercise=db.scalar(select(Exercise).where(func.lower(Exercise.name)==body.name.lower()))
+        if exercise is None:
+            exercise=Exercise(name=body.name,load_convention=body.load_convention)
+            db.add(exercise)
+            try: db.flush()
+            except IntegrityError:
+                db.rollback()
+                raise HTTPException(409,"El ejercicio ya existe; vuelve a seleccionarlo del catálogo")
+        elif not exercise.is_active: raise HTTPException(409,"Este ejercicio está inactivo en el catálogo")
+    else:
+        exercise=db.get(Exercise, body.exercise_id)
     if not exercise: raise HTTPException(404,"Ejercicio no encontrado")
     position = body.position or (db.scalar(select(WorkoutExercise.position).where(WorkoutExercise.workout_id==workout_id).order_by(WorkoutExercise.position.desc())) or 0)+1
     item=WorkoutExercise(workout_id=workout_id,exercise_id=exercise.id,exercise_name_snapshot=exercise.name,position=position); db.add(item); db.commit(); db.refresh(item); return item
@@ -108,6 +124,7 @@ def add_exercise(workout_id:int, body:WorkoutExerciseCreate, db:Session=Depends(
 def update_exercise(item_id:int, body:WorkoutExerciseUpdate, db:Session=Depends(get_db)):
     item=db.get(WorkoutExercise,item_id)
     if not item: raise HTTPException(404,"Ejercicio no encontrado")
+    if db.get(Workout,item.workout_id).ended_at: raise HTTPException(409,"El historial es de solo lectura")
     changes=body.model_dump(exclude_unset=True)
     if "position" in changes and changes["position"] != item.position:
         new_position=changes.pop("position")
@@ -124,14 +141,26 @@ def update_exercise(item_id:int, body:WorkoutExerciseUpdate, db:Session=Depends(
 def add_set(item_id:int, body:SetCreate, db:Session=Depends(get_db)):
     item=db.get(WorkoutExercise,item_id)
     if not item: raise HTTPException(404,"Ejercicio no encontrado")
-    if db.get(Workout,item.workout_id).ended_at: raise HTTPException(409,"La sesión ya terminó")
+    workout=db.get(Workout,item.workout_id)
+    if workout.ended_at: raise HTTPException(409,"La sesión ya terminó")
     position=(db.scalar(select(WorkoutSet.position).where(WorkoutSet.workout_exercise_id==item_id).order_by(WorkoutSet.position.desc())) or 0)+1
-    record=WorkoutSet(workout_exercise_id=item_id,position=position,**body.model_dump()); db.add(record); db.commit(); db.refresh(record); return record
+    now=datetime.now(timezone.utc)
+    workout.rest_until=now+timedelta(seconds=165)
+    record=WorkoutSet(workout_exercise_id=item_id,position=position,created_at=now,**body.model_dump()); db.add(record); db.commit(); db.refresh(record); return record
+
+@app.post("/workouts/{workout_id}/rest/skip", response_model=WorkoutOut)
+def skip_rest(workout_id:int, db:Session=Depends(get_db)):
+    workout=workout_or_404(db,workout_id)
+    if workout.ended_at: raise HTTPException(409,"La sesión ya terminó")
+    workout.rest_until=None
+    db.commit()
+    return workout_or_404(db,workout_id)
 
 @app.patch("/sets/{set_id}", response_model=SetOut)
 def update_set(set_id:int, body:SetUpdate, db:Session=Depends(get_db)):
     record=db.get(WorkoutSet,set_id)
     if not record: raise HTTPException(404,"Serie no encontrada")
+    if record.workout_exercise.workout.ended_at: raise HTTPException(409,"El historial es de solo lectura")
     for key,value in body.model_dump(exclude_unset=True).items(): setattr(record,key,value)
     db.commit(); db.refresh(record); return record
 
@@ -139,6 +168,7 @@ def update_set(set_id:int, body:SetUpdate, db:Session=Depends(get_db)):
 def delete_set(set_id:int, db:Session=Depends(get_db)):
     record=db.get(WorkoutSet,set_id)
     if not record: raise HTTPException(404,"Serie no encontrada")
+    if record.workout_exercise.workout.ended_at: raise HTTPException(409,"El historial es de solo lectura")
     db.delete(record); db.commit()
 
 @app.post("/workouts/{workout_id}/finish", response_model=WorkoutOut)
@@ -146,4 +176,4 @@ def finish(workout_id:int, db:Session=Depends(get_db)):
     from datetime import datetime, timezone
     workout=workout_or_404(db,workout_id)
     if workout.ended_at: raise HTTPException(409,"La sesión ya terminó")
-    workout.ended_at=datetime.now(timezone.utc); db.commit(); return workout_or_404(db,workout_id)
+    workout.ended_at=datetime.now(timezone.utc); workout.rest_until=None; db.commit(); return workout_or_404(db,workout_id)

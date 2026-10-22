@@ -7,7 +7,7 @@ Primer vertical slice móvil para registrar entrenamientos personales. La API es
 1. Copia `.env.example` a `.env`.
 2. Inicia PostgreSQL: `docker compose up -d db`.
 3. En una terminal: `cd backend`, ejecuta `uv sync`, después `uv run alembic upgrade head` y `uv run python seed.py`. Esto crea y administra automáticamente `.venv` y usa `uv.lock` para instalaciones reproducibles.
-4. Ejecuta `uv run python -m app.auth_cli`, escribe y confirma una contraseña de 12 a 128 caracteres. Guarda el hash generado en `OWNER_PASSWORD_HASH` de tu `.env` y elige `OWNER_USERNAME`. La contraseña se solicita oculta y no se pasa como argumento de terminal.
+4. Configura `OWNER_SETUP_TOKEN` en tu `.env` con un código privado aleatorio de 20 a 256 caracteres. Al abrir la app, crea tu usuario y contraseña usando ese código de activación; después elimina `OWNER_SETUP_TOKEN`. No publiques el código ni lo uses como contraseña. Alternativamente, el acceso anterior mediante `OWNER_USERNAME` y `OWNER_PASSWORD_HASH` sigue disponible mientras no exista una cuenta registrada.
 5. Inicia la API: desde `backend`, `uv run uvicorn app.main:app --reload`.
 6. En otra terminal: `cd frontend`, ejecuta `npm ci` y `npm run dev`. Abre `http://localhost:5173` e inicia sesión con el usuario y contraseña configurados.
 
@@ -25,19 +25,19 @@ La interfaz queda disponible en `http://localhost:5173` y la documentación de l
 
 ## Acceso privado y producción
 
-El acceso corresponde a una única cuenta propietaria, sin registro público. Todas las rutas de entrenamientos requieren sesión, también al llamar directamente al backend. El login se recuerda por 30 días en cada dispositivo si se mantiene seleccionada la casilla correspondiente. Sin ella, se usa una cookie de sesión sin Max-Age y el servidor limita el acceso a 12 horas.
+El acceso corresponde a una única cuenta propietaria. El registro inicial requiere un código privado y se cierra después de crearla; no hay registro público para otras personas. Todas las rutas de entrenamientos requieren sesión, también al llamar directamente al backend. El login se recuerda por 30 días en cada dispositivo si se mantiene seleccionada la casilla correspondiente. Sin ella, se usa una cookie de sesión sin Max-Age y el servidor limita el acceso a 12 horas.
 
 Configura estas variables únicamente en el backend:
 
 - `APP_ENV=production`
 - `DATABASE_URL`: conexión Neon con `postgresql+psycopg://` y SSL.
-- `OWNER_USERNAME`: tu usuario.
-- `OWNER_PASSWORD_HASH`: hash Argon2 generado con `uv run python -m app.auth_cli`. Guárdalo como Secret; nunca la contraseña en texto plano.
+- `OWNER_SETUP_TOKEN`: código privado aleatorio de 20 a 256 caracteres, guardado como Secret para la activación inicial. Introduce ese código en el formulario Crear mi cuenta, elige usuario y contraseña, y elimina luego este Secret. La cuenta y su hash Argon2 se guardan en la base; el código nunca se devuelve al navegador.
+- `OWNER_USERNAME` y `OWNER_PASSWORD_HASH`: acceso anterior opcional, solo mientras no exista una cuenta registrada. Para ese modo, genera el hash con `uv run python -m app.auth_cli`; nunca guardes la contraseña en texto plano.
 - `SESSION_DAYS=30`
 - `CORS_ORIGINS=https://personal-gym-registry.vercel.app`
 - `ALLOWED_HOSTS=personal-gym-registry-back.vercel.app`
 
-Antes de publicar, ejecuta `uv run alembic upgrade head` contra Neon. Esta migración conserva los entrenamientos y añade sesiones y control de intentos. Si ya tienes rutinas, no necesitas repetir el seed.
+Antes de publicar, ejecuta `uv run alembic upgrade head` contra Neon. Las migraciones conservan los entrenamientos y añaden sesiones, control de intentos y la tabla de cuenta propietaria (0005). Si ya tienes rutinas, no necesitas repetir el seed.
 
 En el frontend elimina `VITE_API_TOKEN` y `VITE_API_URL`. Elimina también `API_TOKEN` del backend: el antiguo token público deja de conceder acceso.
 
@@ -45,7 +45,7 @@ Los proyectos Vercel mantienen las raíces `frontend` y `backend`. El frontend e
 
 Publica primero el backend con variables y migración listas, y después el frontend. Durante el cambio, un frontend antiguo puede pedir volver a cargar porque su token ya no funciona. Un preview del frontend apunta por defecto al backend de producción: para probar un backend preview hay que cambiar la dirección del proxy en un entorno aislado y autorizar el origen exacto del frontend preview.
 
-Cerrar sesión revoca ese dispositivo. Cambiar `OWNER_PASSWORD_HASH` o `OWNER_USERNAME` y desplegar el backend invalida todas las sesiones anteriores. Para recuperar acceso, genera un hash nuevo y reemplázalo en Vercel. Diez intentos fallidos bloquean el login durante el resto de una ventana de 15 minutos, compartida entre instancias; también afecta al propietario durante ese periodo.
+Cerrar sesión revoca ese dispositivo. Crear la cuenta revoca todas las sesiones anteriores y conserva el historial. Una cuenta registrada tiene prioridad sobre las credenciales de entorno: cambiarlas ya no modifica su contraseña. No hay recuperación automática de contraseña para cuentas registradas; requiere intervención administrativa sobre la cuenta almacenada. En el modo anterior, cambiar `OWNER_PASSWORD_HASH` o `OWNER_USERNAME` invalida las sesiones. Diez intentos fallidos de login o activación bloquean ambos durante el resto de una ventana de 15 minutos, compartida entre instancias.
 
 ## Verificación del login
 

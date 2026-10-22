@@ -11,28 +11,30 @@ Usar libras (lb) como unidad habitual de registro y consulta, conforme al gimnas
 - Conservar la distinción entre carga total, carga por mano, peso corporal, carga adicional y asistencia.
 - Mostrar lb en las futuras gráficas y comparaciones.
 
-## Historial y migración por alinear
+## Historial y migración
 
-- Actualmente el contrato de la aplicación interpreta las cargas como kilogramos.
+- Migración 0003 añade `load_unit`: kg para datos existentes; las nuevas series por API usan lb por defecto.
+- API admite kg/lb explícitos; formularios nuevos registran lb. Las sugerencias solo precargan registros lb, mientras que las referencias muestran ambas unidades explícitamente.
 - Antes de migrar, confirmar si los números ya capturados representan kilogramos o si se escribieron libras a pesar de la etiqueta kg.
 - No convertir automáticamente ni limitarse a cambiar etiquetas sin aclarar ese significado.
-- Definir una unidad explícita de almacenamiento o una conversión coherente en los límites de la API; conservar el significado de los snapshots históricos.
+- La unidad se almacena por serie; no se ejecutan conversiones implícitas.
 - Alinear precisión, redondeo e incrementos de carga y aplicar una migración si cambia el esquema persistente.
-- Actualizar la skill de dominio cuando se implemente el nuevo contrato de unidades.
+- La skill de dominio refleja las unidades explícitas por serie.
 
 ## Límites
 
-- Feature futura: todavía no implementada; las reglas actuales siguen usando kg.
+- Implementada en esta rama: nuevas series en lb; registros anteriores conservan kg y sus números originales.
 - No se presupone un selector de unidades ni soporte multigimnasio.
 
-## Criterios de verificación futuros
+## Verificación
 
-- Registro, edición, recuperación y sugerencias en lb.
-- Historial preservado según la unidad real de los registros anteriores.
-- Casos por mano, peso corporal, carga adicional y asistencia.
-- Conversiones y redondeos sin acumulación de errores al consultar o editar.
+- Suite backend: 32 pruebas; incluye valores por defecto, validación y migración desde registros anteriores.
+- Build de TypeScript/Vite/PWA correcto.
+- Los registros históricos mantienen su valor; una reversión de migración se rechaza si eliminar la unidad reinterpretaría series lb como kg.
+- Las referencias muestran unidad por serie y conservan las variantes de peso corporal, asistencia y carga adicional.
 
 ## Entrega
 
-- Estado: pendiente de alineación del historial e implementación.
-- Rama y pull request de implementación: por crear cuando se inicie esta slice.
+- Estado: implementada, pendiente de revisión; la reinterpretación de cargas históricas queda diferida.
+- Rama: `feature/pounds-load-units` (base `feature/owner-login`).
+- Pull request: [#12](https://github.com/Miike886/PersonalGymRegistry/pull/12), abierta; depende de #11.
