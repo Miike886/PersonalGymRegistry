@@ -22,4 +22,4 @@
 
 - No offline synchronization.
 - Branch: feature/active-session-navigation, base feature/pounds-load-units.
-- PR: pending.
+- PR: [#13](https://github.com/Miike886/PersonalGymRegistry/pull/13), abierta; depende de #12.
