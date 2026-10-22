@@ -2,7 +2,8 @@ from contextlib import asynccontextmanager
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
-from sqlalchemy import select, text
+from sqlalchemy import select, text, func
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 from .database import Base, engine, get_db
 from .config import settings
@@ -99,7 +100,21 @@ def delete_workout(workout_id: int, db: Session = Depends(get_db)):
 
 @app.post("/workouts/{workout_id}/exercises", response_model=WorkoutExerciseOut, status_code=201)
 def add_exercise(workout_id:int, body:WorkoutExerciseCreate, db:Session=Depends(get_db)):
-    workout_or_404(db, workout_id); exercise=db.get(Exercise, body.exercise_id)
+    workout=workout_or_404(db, workout_id)
+    if workout.ended_at: raise HTTPException(409,"La sesión ya terminó")
+    if body.name is not None:
+        if workout.routine.name != "FREE": raise HTTPException(422,"Los ejercicios por nombre se agregan desde una sesión libre")
+        exercise=db.scalar(select(Exercise).where(func.lower(Exercise.name)==body.name.lower()))
+        if exercise is None:
+            exercise=Exercise(name=body.name,load_convention=body.load_convention)
+            db.add(exercise)
+            try: db.flush()
+            except IntegrityError:
+                db.rollback()
+                raise HTTPException(409,"El ejercicio ya existe; vuelve a seleccionarlo del catálogo")
+        elif not exercise.is_active: raise HTTPException(409,"Este ejercicio está inactivo en el catálogo")
+    else:
+        exercise=db.get(Exercise, body.exercise_id)
     if not exercise: raise HTTPException(404,"Ejercicio no encontrado")
     position = body.position or (db.scalar(select(WorkoutExercise.position).where(WorkoutExercise.workout_id==workout_id).order_by(WorkoutExercise.position.desc())) or 0)+1
     item=WorkoutExercise(workout_id=workout_id,exercise_id=exercise.id,exercise_name_snapshot=exercise.name,position=position); db.add(item); db.commit(); db.refresh(item); return item

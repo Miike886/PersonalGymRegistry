@@ -145,6 +145,10 @@ nav .nav-active{color:#101605;background:var(--lime);font-weight:700}
 .catalog-list button{display:flex;align-items:center;justify-content:space-between;gap:16px;text-align:left;min-height:56px;line-height:1.5}
 .catalog-list button span:last-child{color:var(--lime)}
 .sheet-close{width:100%;margin-top:20px}
+.custom-exercise{display:grid;gap:14px;padding:20px 0;margin-bottom:22px;border-bottom:1px solid var(--border)}
+.custom-exercise h3{margin:0;font-size:20px}
+.custom-exercise input{font-size:17px;font-weight:500}
+.custom-exercise small{line-height:1.6}
 @keyframes set-enter{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
 @media(max-width:1000px){
   .routine-grid{grid-template-columns:repeat(2,minmax(0,1fr))}

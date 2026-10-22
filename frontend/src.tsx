@@ -164,18 +164,34 @@ function RecentWorkoutReference({ workouts, routineName, error, retry }:{ workou
   </aside>
 }
 
-function ExercisePicker({catalog,choose,close}:{catalog:Exercise[];choose:(id:number)=>Promise<void>;close:()=>void}) {
+type ExerciseDraft = {name:string; convention:'TOTAL'|'PER_HAND'}
+function ExercisePicker({catalog,choose,custom,close,draft,setDraft}:{catalog:Exercise[];choose:(id:number)=>Promise<void>;custom?: (name:string,convention:'TOTAL'|'PER_HAND')=>Promise<void>;close:()=>void;draft:ExerciseDraft;setDraft:(value:ExerciseDraft)=>void}) {
   const dialog=useRef<HTMLDialogElement>(null)
+  const [busy,setBusy]=useState(false),[error,setError]=useState('')
   useEffect(()=>{
     const node=dialog.current, opener=document.activeElement as HTMLElement|null
     node?.showModal()
     return ()=>{ node?.close(); opener?.focus() }
   },[])
-  return <dialog className="sheet" ref={dialog} onCancel={close} aria-labelledby="catalog-title">
-    <div className="sheet-heading"><div><p className="eyebrow">DALE TU FORMA</p><h2 id="catalog-title">Agregar o sustituir</h2></div><button onClick={close} aria-label="Cerrar catálogo">×</button></div>
+  const run=async(action:()=>Promise<void>)=>{
+    setBusy(true);setError('')
+    try { await action() }
+    catch(err) { if(err instanceof ApiError && err.status===401) close(); else setError(err instanceof Error?err.message:'No se pudo agregar el ejercicio') }
+    finally { setBusy(false) }
+  }
+  return <dialog className="sheet" ref={dialog} onCancel={event=>{if(busy)event.preventDefault();else close()}} aria-labelledby="catalog-title">
+    <div className="sheet-heading"><div><p className="eyebrow">DALE TU FORMA</p><h2 id="catalog-title">Agregar o sustituir</h2></div><button onClick={close} disabled={busy} aria-label="Cerrar catálogo">×</button></div>
     <p className="muted">Elige un ejercicio. Puedes saltar el que quieras sustituir.</p>
-    <div className="catalog-list">{catalog.map(exercise=><button key={exercise.id} onClick={()=>choose(exercise.id)}><span>{exercise.name}</span><span aria-hidden="true">＋</span></button>)}</div>
-    <button className="sheet-close" onClick={close}>Volver al entrenamiento</button>
+    <ErrorNotice message={error}/>
+    {custom && <form className="custom-exercise" onSubmit={event=>{event.preventDefault();run(()=>custom(draft.name,draft.convention))}}>
+      <h3>¿No está en la lista?</h3>
+      <label className="field"><span>Nombre del ejercicio</span><input value={draft.name} onChange={event=>setDraft({...draft,name:event.target.value})} required maxLength={100} disabled={busy}/></label>
+      <label className="field"><span>Cómo registrarás la carga</span><select aria-label="Cómo registrarás la carga" value={draft.convention} onChange={event=>setDraft({...draft,convention:event.target.value as 'TOTAL'|'PER_HAND'})} disabled={busy}><option value="TOTAL">Carga total</option><option value="PER_HAND">Por mano</option></select></label>
+      <button className="primary" disabled={busy || !draft.name.trim()}>{busy?'Agregando…':'Crear y agregar ejercicio'}</button>
+      <small>Se guardará en tu catálogo para próximas sesiones.</small>
+    </form>}
+    <div className="catalog-list">{catalog.map(exercise=><button key={exercise.id} disabled={busy} onClick={()=>run(()=>choose(exercise.id))}><span>{exercise.name}</span><span aria-hidden="true">＋</span></button>)}</div>
+    <button className="sheet-close" disabled={busy} onClick={close}>Volver al entrenamiento</button>
   </dialog>
 }
 
@@ -184,6 +200,7 @@ function Session({ workout, refresh, finish, cancelWorkout, error, browse }:{ wo
 const loadReference = () => { setReferenceError(''); Promise.all([api(`/routines/${workout.routine_id}/recent-workouts?limit=2`), api('/exercises')]).then(([recentWorkouts, exercises]) => { setRecent(recentWorkouts); setCatalog(exercises); const previous = recentWorkouts[0], nextWeights:Record<number,string> = {}, nextTypes:Record<number,WeightType> = {}; workout.exercises.forEach(item => { const previousExercise = previous?.exercises.find((exercise:WorkoutExercise) => exercise.exercise_id === item.exercise_id); const suggestion = previousExercise?.sets.slice().reverse().find((set:WorkoutSet) => set.set_type === 'WORKING' && set.load_unit === 'lb'); if (suggestion) { if (suggestion.load_value != null) nextWeights[item.id] = String(suggestion.load_value); nextTypes[item.id] = suggestion.weight_type } }); setWeights(current => ({ ...nextWeights, ...current })); setWeightTypes(current => ({ ...nextTypes, ...current })) }).catch((err:any) => setReferenceError(err.message)) }
   useEffect(() => { loadReference() }, [workout.id])
   useEffect(() => { if (!restUntil) return; const timer = window.setInterval(() => setNow(Date.now()), 1000); return () => window.clearInterval(timer) }, [restUntil])
+  const [customDraft,setCustomDraft]=useState<ExerciseDraft>({name:'',convention:'TOTAL'})
   const reference = (item:WorkoutExercise) => { const found = recent[0]?.exercises.find(exercise => exercise.exercise_id === item.exercise_id); return found?.sets.slice().reverse().find(set => set.set_type === 'WORKING') }
   const exercise = (item:WorkoutExercise) => catalog.find(entry => entry.id === item.exercise_id)
   const convention = (item:WorkoutExercise) => exercise(item)?.load_convention === 'PER_HAND' ? 'lb por mano' : 'lb totales'
@@ -194,6 +211,11 @@ const loadReference = () => { setReferenceError(''); Promise.all([api(`/routines
   const move = async (item:WorkoutExercise, direction:number) => { await api(`/workout-exercises/${item.id}`, { method:'PATCH', body:JSON.stringify({ position:Math.max(1, item.position + direction) }) }); refresh() }
   const toggle = async (item:WorkoutExercise) => { await api(`/workout-exercises/${item.id}`, { method:'PATCH', body:JSON.stringify({ skipped:!item.skipped }) }); refresh() }
   const addExercise = async (exerciseId:number) => { await api(`/workouts/${workout.id}/exercises`, { method:'POST', body:JSON.stringify({ exercise_id:exerciseId }) }); setAdding(false); refresh() }
+  const addCustomExercise=async(name:string,convention:'TOTAL'|'PER_HAND')=>{
+    const item=await api(`/workouts/${workout.id}/exercises`,{method:'POST',body:JSON.stringify({name,load_convention:convention})})
+    setCatalog(current=>current.some(entry=>entry.id===item.exercise_id)?current:[...current,{id:item.exercise_id,name:item.exercise_name_snapshot,load_convention:convention}])
+    setCustomDraft({name:'',convention:'TOTAL'});setAdding(false);await refresh()
+  }
   const seconds = restUntil ? Math.max(0, Math.ceil((restUntil - now) / 1000)) : 0
 
   return <main className="workout-page">
@@ -219,7 +241,7 @@ const loadReference = () => { setReferenceError(''); Promise.all([api(`/routines
       </section> })}</div>
       <button className="add" onClick={()=>setAdding(true)} aria-haspopup="dialog">＋ Agregar o sustituir ejercicio</button>
     </div><RecentWorkoutReference workouts={recent} routineName={workout.routine.name} error={referenceError} retry={loadReference} /></div>
-    {adding && <ExercisePicker catalog={catalog} choose={addExercise} close={()=>setAdding(false)} />}
+    {adding && <ExercisePicker catalog={catalog} choose={addExercise} custom={workout.routine.name==='FREE'?addCustomExercise:undefined} draft={customDraft} setDraft={setCustomDraft} close={()=>setAdding(false)} />}
   </main>
 }
 

@@ -129,6 +129,18 @@ try {
     assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true)
     if(width===375||width===1440) await page.screenshot({path:path.join(frontend,'node_modules/.cache/owner-login-'+width+'.png'),fullPage:true})
   }
+  await page.getByLabel('Usuario',{exact:true}).fill('browser-owner')
+  await page.getByLabel('Contraseña',{exact:true}).fill(password)
+  await page.getByRole('button',{name:'Entrar a mi espacio'}).click()
+  await page.getByRole('button',{name:'Cancelar entrenamiento',exact:true}).click()
+  await page.getByRole('button',{name:/FREE.*Libre/}).click()
+  await page.getByRole('button',{name:'＋ Agregar o sustituir ejercicio',exact:true}).click()
+  await page.getByLabel('Nombre del ejercicio',{exact:true}).fill('Ejercicio libre de prueba')
+  await page.getByLabel('Cómo registrarás la carga',{exact:true}).selectOption('PER_HAND')
+  await page.getByRole('button',{name:'Crear y agregar ejercicio',exact:true}).click()
+  await page.getByRole('heading',{name:'Ejercicio libre de prueba',exact:true}).waitFor()
+  const catalog=await (await context.request.get(origin+'/api/exercises')).json()
+  assert.equal(catalog.find(item=>item.name==='Ejercicio libre de prueba')?.load_convention,'PER_HAND')
   assert.deepEqual(errors,[])
   console.log('PASS: real login/proxy, anonymous denial, wrong password, persistent browser session, CSRF, expired-session re-login with preserved inputs, recording/recovery, logout, five responsive widths.')
 } catch(error) {
