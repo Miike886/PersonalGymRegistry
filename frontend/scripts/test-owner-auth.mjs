@@ -103,6 +103,10 @@ try {
   await page.getByRole('button',{name:/Retomar PUSH/}).click()
   assert.equal(await exercise.getByLabel(/Peso:/).inputValue(),'27.5')
   assert.equal(await exercise.getByLabel(/Repeticiones:/).inputValue(),'9')
+  await page.reload()
+  await page.getByRole('heading',{name:'Tu entrenamiento',exact:true}).waitFor()
+  assert.equal(await exercise.getByLabel(/Peso:/).inputValue(),'27.5')
+  assert.equal(await exercise.getByLabel(/Repeticiones:/).inputValue(),'9')
   pythonCommand(['-c','from datetime import timedelta; from app.auth import OwnerSession, utcnow; from app.database import SessionLocal; db=SessionLocal(); db.query(OwnerSession).update({OwnerSession.expires_at:utcnow()-timedelta(seconds=1)}); db.commit(); db.close()'])
   await exercise.getByRole('button',{name:'Registrar serie'}).click()
   await page.getByRole('heading',{name:'Iniciar sesión',exact:true}).waitFor()
@@ -129,6 +133,7 @@ try {
   await page.getByRole('heading',{name:'Iniciar sesión',exact:true}).waitFor()
   assert.equal((await context.request.get(origin+'/api/workouts')).status(),401)
   assert.equal(await page.locator('.exercise-card').count(),0)
+  assert.equal(await page.evaluate(()=>Object.keys(sessionStorage).some(key=>key.startsWith('gym:session-draft:'))),false)
   assert.equal(pythonCommand(['-c','from app.database import SessionLocal; from app.models import Workout; db=SessionLocal(); print(db.query(Workout).filter(Workout.ended_at.is_(None)).count()); db.close()']),'1')
   await mkdir(path.join(frontend,'node_modules/.cache'),{recursive:true})
   for(const width of [320,375,430,768,1440]) {
