@@ -47,6 +47,7 @@ Ideas detectadas durante el uso real. Cada feature se definirá y entregará en 
 
 - Estado: pendiente de más detalles del usuario.
 - Se entrega aparte pulido funcional de formularios, errores y protección contra envíos repetidos; no sustituye la futura alineación estética.
+- Pulido funcional: PR #19, pendiente de aprobación.
 - Conservar la dirección Performance con verde lima como base.
 - Recopilar observaciones del uso real y ajustar el diseño según esos casos.
 

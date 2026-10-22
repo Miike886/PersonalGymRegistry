@@ -22,4 +22,6 @@
 
 ## Delivery
 
-- Branch feature/session-interaction-polish; base feature/workout-progress-charts; PR pending.
+- Branch feature/session-interaction-polish; base feature/workout-progress-charts; PR #19, open.
+- Quality gate: resolved a lifecycle error being cleared by the follow-up refresh; failed cancellation now remains visible and the browser test covers recovery. Reviewed API validation, read-only history and modal/privacy behavior against the base diff. No remaining blocking findings from this review.
+- Verified locally: 43 backend tests, frontend model tests, production build and real Edge/API/proxy flow, including edit expiry/re-login and cancellation failure. Remote CI is checked at final handoff.
