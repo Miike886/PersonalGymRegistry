@@ -51,7 +51,7 @@ Ideas detectadas durante el uso real. Cada feature se definirá y entregará en 
 
 ## Calendario de asistencia
 
-- Estado: pendiente.
+- Estado: implementado en PR apilada de calendario; pendiente de aprobación.
 - Calendario visual de los días con entrenamientos finalizados y acceso a sus sesiones.
 - Detalle y criterios: [Calendario de asistencia](features/workout-attendance-calendar.md).
 
