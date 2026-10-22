@@ -56,26 +56,48 @@ function WorkoutRows({ item }:{item:WorkoutExercise}) {
 
 function Login({done, notice, retry}:{done:(owner:{username:string})=>void;notice:string;retry:()=>void}) {
   const [username,setUsername]=useState(''), [password,setPassword]=useState(''), [remember,setRemember]=useState(true), [busy,setBusy]=useState(false), [error,setError]=useState('')
-  const submit=async (event:React.FormEvent)=>{
-    event.preventDefault(); setBusy(true); setError('')
+  const [registration,setRegistration]=useState(false), [available,setAvailable]=useState(false), [activation,setActivation]=useState(''), [confirmation,setConfirmation]=useState(''), [statusError,setStatusError]=useState('')
+  const loadStatus=async ()=>{
+    setStatusError('')
     try {
-      const owner=await api('/auth/login',{method:'POST',body:JSON.stringify({username,password,remember})})
-      setPassword(''); done(owner)
+      const status=await api('/auth/registration')
+      setAvailable(status.available)
+      setRegistration(status.available && !status.configured)
+      if (!status.available && !status.configured) setStatusError('La creación de tu cuenta aún no está habilitada. Falta activar el acceso en el servidor.')
+    } catch { setStatusError('No se pudo comprobar si puedes crear tu cuenta. Inténtalo de nuevo.') }
+  }
+  useEffect(()=>{loadStatus()},[])
+  const submit=async (event:React.FormEvent)=>{
+    event.preventDefault()
+    if (busy) return
+    if (registration && password!==confirmation) {setError('Las contraseñas no coinciden'); return}
+    setBusy(true); setError('')
+    try {
+      const owner=await api(registration ? '/auth/register' : '/auth/login',{method:'POST',body:JSON.stringify({username,password,remember,...(registration ? {setup_token:activation} : {})})})
+      setPassword(''); setConfirmation(''); setActivation(''); done(owner)
     } catch(err) { setError(err instanceof Error ? err.message : 'No se pudo iniciar sesión') }
     finally { setBusy(false) }
   }
   return <main className="login-page"><header className="topbar"><Brand /><span className="live-badge">ACCESO PRIVADO</span></header>
     <div className="login-layout"><div className="login-intro"><p className="eyebrow">TU ESPACIO DE ENTRENAMIENTO</p><h1>Tu esfuerzo.<br/><em>Tu progreso.</em></h1><p className="hero-description">Tus rutinas, tus series y tu historial. Inicia sesión para continuar donde lo dejaste.</p></div>
-      <section className="login-card" aria-labelledby="login-title"><p className="eyebrow">BIENVENIDO DE NUEVO</p><h2 id="login-title">Iniciar sesión</h2>
+      <section className="login-card" aria-labelledby="login-title"><p className="eyebrow">{registration ? 'TU CUENTA PERSONAL' : 'BIENVENIDO DE NUEVO'}</p><h2 id="login-title">{registration ? 'Crear mi cuenta' : 'Iniciar sesión'}</h2>
         {notice && <div className="login-notice"><p role="status">{notice}</p><button onClick={retry} disabled={busy}>Comprobar sesión</button></div>}
         <ErrorNotice message={error}/>
+        {statusError && <div className="login-notice"><p role="status">{statusError}</p><button onClick={loadStatus} disabled={busy}>Comprobar acceso</button></div>}
         <form onSubmit={submit}>
           <label className="field"><span>Usuario</span><input autoComplete="username" name="username" value={username} onChange={e=>setUsername(e.target.value)} maxLength={100} required disabled={busy}/></label>
-          <label className="field"><span>Contraseña</span><input type="password" autoComplete="current-password" name="password" value={password} onChange={e=>setPassword(e.target.value)} maxLength={128} required disabled={busy}/></label>
+          <label className="field"><span>Contraseña</span><input type="password" autoComplete={registration ? 'new-password' : 'current-password'} name="password" value={password} onChange={e=>setPassword(e.target.value)} minLength={registration ? 12 : 1} maxLength={128} required disabled={busy}/></label>
+          {registration && <>
+            <p className="muted">Elige una contraseña de al menos 12 caracteres. Esta será la única cuenta de la aplicación.</p>
+            <label className="field"><span>Confirmar contraseña</span><input type="password" autoComplete="new-password" value={confirmation} onChange={e=>setConfirmation(e.target.value)} minLength={12} maxLength={128} required disabled={busy}/></label>
+            <label className="field"><span>Código de activación</span><input type="password" autoComplete="off" value={activation} onChange={e=>setActivation(e.target.value)} minLength={20} maxLength={256} required disabled={busy}/></label>
+            <p className="muted">Usa el código privado de activación para vincular tu cuenta con tus entrenamientos.</p>
+          </>}
           <label className="checkbox-label"><input type="checkbox" checked={remember} onChange={e=>setRemember(e.target.checked)} disabled={busy}/>Mantener mi sesión iniciada</label>
           <p className="muted login-hint">Recuerda este dispositivo para entrar directamente a tu entrenamiento.</p>
-          <button className="primary" type="submit" disabled={busy}>{busy ? 'Entrando…' : 'Entrar a mi espacio ↗'}</button>
+          <button className="primary" type="submit" disabled={busy}>{busy ? (registration ? 'Creando cuenta…' : 'Entrando…') : (registration ? 'Crear cuenta y entrar ↗' : 'Entrar a mi espacio ↗')}</button>
         </form>
+        {available && <button disabled={busy} onClick={()=>{setRegistration(!registration);setPassword('');setConfirmation('');setActivation('');setError('')}}>{registration ? 'Ya tengo acceso. Iniciar sesión' : 'Crear mi cuenta'}</button>}
       </section>
     </div>
   </main>
