@@ -124,6 +124,7 @@ def add_exercise(workout_id:int, body:WorkoutExerciseCreate, db:Session=Depends(
 def update_exercise(item_id:int, body:WorkoutExerciseUpdate, db:Session=Depends(get_db)):
     item=db.get(WorkoutExercise,item_id)
     if not item: raise HTTPException(404,"Ejercicio no encontrado")
+    if db.get(Workout,item.workout_id).ended_at: raise HTTPException(409,"El historial es de solo lectura")
     changes=body.model_dump(exclude_unset=True)
     if "position" in changes and changes["position"] != item.position:
         new_position=changes.pop("position")
@@ -159,6 +160,7 @@ def skip_rest(workout_id:int, db:Session=Depends(get_db)):
 def update_set(set_id:int, body:SetUpdate, db:Session=Depends(get_db)):
     record=db.get(WorkoutSet,set_id)
     if not record: raise HTTPException(404,"Serie no encontrada")
+    if record.workout_exercise.workout.ended_at: raise HTTPException(409,"El historial es de solo lectura")
     for key,value in body.model_dump(exclude_unset=True).items(): setattr(record,key,value)
     db.commit(); db.refresh(record); return record
 
@@ -166,6 +168,7 @@ def update_set(set_id:int, body:SetUpdate, db:Session=Depends(get_db)):
 def delete_set(set_id:int, db:Session=Depends(get_db)):
     record=db.get(WorkoutSet,set_id)
     if not record: raise HTTPException(404,"Serie no encontrada")
+    if record.workout_exercise.workout.ended_at: raise HTTPException(409,"El historial es de solo lectura")
     db.delete(record); db.commit()
 
 @app.post("/workouts/{workout_id}/finish", response_model=WorkoutOut)

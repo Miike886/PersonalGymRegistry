@@ -32,6 +32,7 @@ Use this skill whenever a change affects the Gym Session Tracker domain model, A
 - Workout data is private to the single configured owner; all API reads and writes require a server-validated session. Logout or authentication expiry never finishes or cancels an active workout.
 - The normal mobile flow is weight confirmation, repetitions entry, and one tap to record. Preserve the selected/preloaded weight after a set.
 - Recent completed workout data is reference-only, excludes active sessions, and must not mutate current records.
+- Completed session contents are read-only in the API as well as UI; set edits/deletion and exercise reordering/skipping reject completed workouts. Explicit confirmed deletion of the whole workout remains allowed.
 
 ## Change workflow
 

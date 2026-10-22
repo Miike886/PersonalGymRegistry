@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import './style.css'
+import {SetEditor,type EditDraft} from './set-editor'
 import { Progress } from './progress'
 import { AttendanceCalendar } from './attendance'
 import { clearDrafts, readDraft, saveDraft, useWallClock, FloatingTimer } from './session-continuity'
@@ -113,6 +114,7 @@ function App() {
 
 function WorkoutApp({authVersion}:{authVersion:number}) {
   const [active, setActive] = useState<Workout|null>(null), [routines, setRoutines] = useState<any[]>([]), [history, setHistory] = useState<Workout[]>([]), [selected, setSelected] = useState<Workout|null>(null), [view, setView] = useState<'home'|'history'|'detail'|'session'|'calendar'|'progress'>('home'), [error, setError] = useState(''), [loadingDetail, setLoadingDetail] = useState(false)
+  const [lifecycleBusy,setLifecycleBusy]=useState(false)
   const initialLoad = useRef(true),loadVersion=useRef(0),mutating=useRef(false)
   const load = async () => {
     if(mutating.current)return
@@ -128,9 +130,10 @@ function WorkoutApp({authVersion}:{authVersion:number}) {
   useEffect(()=>{const resume=()=>{if(document.visibilityState==='visible')load()};window.addEventListener('focus',resume);window.addEventListener('pageshow',resume);document.addEventListener('visibilitychange',resume);return()=>{loadVersion.current++;window.removeEventListener('focus',resume);window.removeEventListener('pageshow',resume);document.removeEventListener('visibilitychange',resume)}},[])
   const mutate=async(action:()=>Promise<void>)=>{
     if(mutating.current)return
-    mutating.current=true;loadVersion.current++;setError('')
-    try{await action()}catch(err){setError(err instanceof Error?err.message:'No se pudo guardar el cambio')}
-    finally{mutating.current=false;await load()}
+    mutating.current=true;setLifecycleBusy(true);loadVersion.current++;setError('')
+    let failure=''
+    try{await action()}catch(err){failure=err instanceof Error?err.message:'No se pudo guardar el cambio'}
+    finally{mutating.current=false;await load();setLifecycleBusy(false);if(failure)setError(failure)}
   }
   const start = (routineId:number) => mutate(async()=>{setActive(await api('/workouts',{method:'POST',body:JSON.stringify({routine_id:routineId})}));setView('session')})
   const finish = () => {if(active && confirm('¿Finalizar entrenamiento?'))mutate(async()=>{await api(`/workouts/${active.id}/finish`,{method:'POST'});clearDrafts(active.id);setActive(null);setView('history')})}
@@ -150,7 +153,7 @@ function WorkoutApp({authVersion}:{authVersion:number}) {
       </button>)}</div> : <div className="empty-state"><span aria-hidden="true">↗</span><h3>Tu recorrido empieza aquí</h3><p>Al finalizar tu primer entrenamiento, podrás consultarlo en este espacio.</p><button className="primary" onClick={() => setView('home')}>Elegir rutina</button></div>}
     </> : <>
       <div className="section-heading"><h2>El entrenamiento de hoy</h2><span className="eyebrow">A TU RITMO</span></div>
-      <div className="routine-grid">{routines.map(routine => { const info= routineInfo[routine.name]; return <button className="routine" data-routine={routine.name} key={routine.id} disabled={!!active} onClick={() => start(routine.id)}>
+      <div className="routine-grid">{routines.map(routine => { const info= routineInfo[routine.name]; return <button className="routine" data-routine={routine.name} key={routine.id} disabled={!!active || lifecycleBusy} onClick={() => start(routine.id)}>
         <span className="routine-top"><span className="routine-tag">{routine.name}</span><span className="routine-number" aria-hidden="true">{info?.number || '↗'}</span></span>
         <span className="routine-title">{info?.title || routine.name}</span><span className="routine-description">{info?.subtitle || 'Una sesión para ti'}</span>
         <span className="routine-footer"><span>{routine.exercises.length ? routine.exercises.length + ' ejercicios' : 'Empieza vacío'}</span><span className="round-arrow" aria-hidden="true">↗</span></span>
@@ -158,7 +161,7 @@ function WorkoutApp({authVersion}:{authVersion:number}) {
     </>}
     <footer className="page-footer"><Brand /><span>UNA SERIE A LA VEZ.</span></footer>
   </main>}</div>
-    {active && <div hidden={view!=='session'}><Session key={active.id} workout={active} refresh={load} finish={finish} cancelWorkout={cancelWorkout} error={error} browse={()=>setView('home')}/></div>}
+    {active && <div hidden={view!=='session'}><Session key={active.id} workout={active} lifecycleBusy={lifecycleBusy} refresh={load} finish={finish} cancelWorkout={cancelWorkout} error={error} browse={()=>setView('home')}/></div>}
     {active && <FloatingTimer workout={active}/>}
     {active && view!=='session' && <button className="resume-session" onClick={()=>setView('session')}>● Retomar {active.routine.name} <span>Entrenamiento en curso ↗</span></button>}
   </>
@@ -217,23 +220,38 @@ function ExercisePicker({catalog,choose,custom,close,draft,setDraft}:{catalog:Ex
   </dialog>
 }
 
-function Session({ workout, refresh, finish, cancelWorkout, error, browse }:{ workout:Workout; refresh:() => Promise<void>; finish:() => void; cancelWorkout:() => void; error:string; browse:()=>void }) {
+function Session({ workout, refresh, finish, cancelWorkout, error, browse, lifecycleBusy }:{ workout:Workout; refresh:() => Promise<void>; finish:() => void; cancelWorkout:() => void; error:string; browse:()=>void; lifecycleBusy:boolean }) {
   const [draft]=useState(()=>readDraft(workout.id))
-  const [weights, setWeights] = useState<Record<number,string>>(draft.weights||{}), [weightTypes, setWeightTypes] = useState<Record<number,WeightType>>(draft.weightTypes||{}), [reps, setReps] = useState(draft.reps||''), [warm, setWarm] = useState(draft.warm||false), [adding, setAdding] = useState(false), [catalog, setCatalog] = useState<Exercise[]>([]), [recent, setRecent] = useState<Workout[]>([]), [referenceError, setReferenceError] = useState('')
+  const [weights, setWeights] = useState<Record<number,string>>(draft.weights||{}), [weightTypes, setWeightTypes] = useState<Record<number,WeightType>>(draft.weightTypes||{}), [reps, setReps] = useState<Record<number,string>>(draft.repsById || (draft.reps && workout.exercises[0]?{[workout.exercises[0].id]:draft.reps}:{})), [warm, setWarm] = useState<Record<number,boolean>>(draft.warmsById || (draft.warm && workout.exercises[0]?{[workout.exercises[0].id]:true}:{})), [adding, setAdding] = useState(false), [catalog, setCatalog] = useState<Exercise[]>([]), [recent, setRecent] = useState<Workout[]>([]), [referenceError, setReferenceError] = useState('')
   const now=useWallClock()
 const loadReference = () => { setReferenceError(''); Promise.all([api(`/routines/${workout.routine_id}/recent-workouts?limit=2`), api('/exercises')]).then(([recentWorkouts, exercises]) => { setRecent(recentWorkouts); setCatalog(exercises); const previous = recentWorkouts[0], nextWeights:Record<number,string> = {}, nextTypes:Record<number,WeightType> = {}; workout.exercises.forEach(item => { const previousExercise = previous?.exercises.find((exercise:WorkoutExercise) => exercise.exercise_id === item.exercise_id); const suggestion = previousExercise?.sets.slice().reverse().find((set:WorkoutSet) => set.set_type === 'WORKING' && set.load_unit === 'lb'); if (suggestion) { if (suggestion.load_value != null) nextWeights[item.id] = String(suggestion.load_value); nextTypes[item.id] = suggestion.weight_type } }); setWeights(current => ({ ...nextWeights, ...current })); setWeightTypes(current => ({ ...nextTypes, ...current })) }).catch((err:any) => setReferenceError(err.message)) }
   useEffect(() => { loadReference() }, [workout.id])
   const [customDraft,setCustomDraft]=useState<ExerciseDraft>(draft.customDraft||{name:'',convention:'TOTAL'})
-  useEffect(()=>{saveDraft(workout.id,{weights,weightTypes,reps,warm,customDraft})},[workout.id,weights,weightTypes,reps,warm,customDraft])
+  useEffect(()=>{saveDraft(workout.id,{weights,weightTypes,repsById:reps,warmsById:warm,customDraft})},[workout.id,weights,weightTypes,reps,warm,customDraft])
   const reference = (item:WorkoutExercise) => { const found = recent[0]?.exercises.find(exercise => exercise.exercise_id === item.exercise_id); return found?.sets.slice().reverse().find(set => set.set_type === 'WORKING') }
   const exercise = (item:WorkoutExercise) => catalog.find(entry => entry.id === item.exercise_id)
   const convention = (item:WorkoutExercise) => exercise(item)?.load_convention === 'PER_HAND' ? 'lb por mano' : 'lb totales'
   const typeFor = (item:WorkoutExercise):WeightType => weightTypes[item.id] || 'EXTERNAL'
-  const add = async (item:WorkoutExercise) => { try { const type = typeFor(item); await api(`/workout-exercises/${item.id}/sets`, { method:'POST', body:JSON.stringify({ reps:Number(reps), load_value:type === 'BODYWEIGHT' ? null : weights[item.id] ? Number(weights[item.id]) : null, load_unit:'lb', weight_type:type, set_type:warm ? 'WARMUP' : 'WORKING' }) }); setReps(''); setWarm(false); await refresh() } catch (err:any) { alert(err.message) } }
-  const editSet = async (set:WorkoutSet) => { const nextReps = prompt('Repeticiones', String(set.reps)); if (!nextReps) return; const nextLoad = set.load_value == null ? null : prompt(`Peso (${set.load_unit})`, String(set.load_value)); await api(`/sets/${set.id}`, { method:'PATCH', body:JSON.stringify({ reps:Number(nextReps), load_value:nextLoad === null ? null : Number(nextLoad) }) }); refresh() }
-  const deleteSet = async (set:WorkoutSet) => { if (confirm('¿Eliminar esta serie?')) { await api(`/sets/${set.id}`, { method:'DELETE' }); refresh() } }
-  const move = async (item:WorkoutExercise, direction:number) => { await api(`/workout-exercises/${item.id}`, { method:'PATCH', body:JSON.stringify({ position:Math.max(1, item.position + direction) }) }); refresh() }
-  const toggle = async (item:WorkoutExercise) => { await api(`/workout-exercises/${item.id}`, { method:'PATCH', body:JSON.stringify({ skipped:!item.skipped }) }); refresh() }
+  const inFlight=useRef(false),[busy,setBusy]=useState(false),[actionError,setActionError]=useState(''),[editing,setEditing]=useState<EditDraft|null>(null),[editVisible,setEditVisible]=useState(false)
+  const locked=busy||lifecycleBusy
+  const run=async(action:()=>Promise<void>)=>{
+    if(inFlight.current||lifecycleBusy)return
+    inFlight.current=true;setBusy(true);setActionError('')
+    try{await action()}catch(err){setActionError(err instanceof Error?err.message:'No se pudo guardar el cambio')}
+    finally{inFlight.current=false;setBusy(false)}
+  }
+  const add=(item:WorkoutExercise)=>run(async()=>{
+    const count=Number(reps[item.id]),load=weights[item.id]?.trim().replace(',','.'),type=typeFor(item)
+    if(!Number.isInteger(count)||count<1||count>999)throw new Error('Escribe entre 1 y 999 repeticiones.')
+    if(type!=='BODYWEIGHT' && load && (!Number.isFinite(Number(load))||Number(load)<0))throw new Error('La carga debe ser un número válido, igual o mayor que cero.')
+    await api(`/workout-exercises/${item.id}/sets`,{method:'POST',body:JSON.stringify({reps:count,load_value:type==='BODYWEIGHT'||!load?null:Number(load),load_unit:'lb',weight_type:type,set_type:warm[item.id]?'WARMUP':'WORKING'})})
+    setReps(current=>({...current,[item.id]:''}));setWarm(current=>({...current,[item.id]:false}));await refresh()
+  })
+  const editSet=(record:WorkoutSet)=>{setEditing({record,reps:String(record.reps),load:record.load_value===null?'':String(record.load_value)});setEditVisible(true)}
+  const saveSet=async(changes:{reps:number;load_value:number|null})=>{if(!editing)return;await api(`/sets/${editing.record.id}`,{method:'PATCH',body:JSON.stringify(changes)});await refresh()}
+  const deleteSet=(set:WorkoutSet)=>{if(confirm('¿Eliminar esta serie?'))run(async()=>{await api(`/sets/${set.id}`,{method:'DELETE'});await refresh()})}
+  const move=(item:WorkoutExercise,direction:number)=>run(async()=>{await api(`/workout-exercises/${item.id}`,{method:'PATCH',body:JSON.stringify({position:Math.max(1,item.position+direction)})});await refresh()})
+  const toggle=(item:WorkoutExercise)=>run(async()=>{await api(`/workout-exercises/${item.id}`,{method:'PATCH',body:JSON.stringify({skipped:!item.skipped})});await refresh()})
   const addExercise = async (exerciseId:number) => { await api(`/workouts/${workout.id}/exercises`, { method:'POST', body:JSON.stringify({ exercise_id:exerciseId }) }); setAdding(false); refresh() }
   const addCustomExercise=async(name:string,convention:'TOTAL'|'PER_HAND')=>{
     const item=await api(`/workouts/${workout.id}/exercises`,{method:'POST',body:JSON.stringify({name,load_convention:convention})})
@@ -242,16 +260,18 @@ const loadReference = () => { setReferenceError(''); Promise.all([api(`/routines
   }
   const seconds = workout.rest_until ? Math.max(0, Math.ceil((timestamp(workout.rest_until) - now) / 1000)) : 0
   const elapsed = Math.max(0,Math.floor((now-timestamp(workout.started_at))/1000))
-  const skipRest = async()=>{try {await api(`/workouts/${workout.id}/rest/skip`,{method:'POST'});await refresh()}catch(err){alert(err instanceof Error?err.message:'No se pudo omitir el descanso')}}
+  const skipRest = ()=>run(async()=>{await api(`/workouts/${workout.id}/rest/skip`,{method:'POST'});await refresh()})
 
   return <main className="workout-page">
     <header className="topbar"><Brand /><div className="session-navigation"><span className="live-badge"><i /> SESIÓN EN CURSO</span><button onClick={browse}>Explorar app</button></div></header>
-    <div className="session-title"><div><p className="eyebrow">HOY TOCA</p><h1>{routineInfo[workout.routine.name]?.title || workout.routine.name}<em>.</em></h1><div className="session-metrics"><span role="timer" aria-label="Tiempo de sesión">{clock(elapsed)}</span><span>{workout.exercises.length} ejercicios</span><span>{workout.exercises.reduce((total,item)=>total+item.sets.length,0)} series registradas</span></div></div><div className="header-actions"><button onClick={finish} className="primary">Finalizar sesión ↗</button><button onClick={cancelWorkout} className="cancel-workout">Cancelar entrenamiento</button></div></div>
-    <ErrorNotice message={error} />
-    {seconds > 0 && <div className="rest-timer" role="timer" aria-label="Tiempo de descanso restante"><div><p className="eyebrow">RECUPERA EL AIRE</p><b>Tu siguiente serie te espera.</b></div><span className="rest-clock">{Math.floor(seconds/60)}:{String(seconds%60).padStart(2,'0')}</span><button onClick={skipRest}>Omitir descanso</button><div className="rest-track" aria-hidden="true"><span style={{width:(seconds/165*100)+'%'}} /></div></div>}
+    <div className="session-title"><div><p className="eyebrow">HOY TOCA</p><h1>{routineInfo[workout.routine.name]?.title || workout.routine.name}<em>.</em></h1><div className="session-metrics"><span role="timer" aria-label="Tiempo de sesión">{clock(elapsed)}</span><span>{workout.exercises.length} ejercicios</span><span>{workout.exercises.reduce((total,item)=>total+item.sets.length,0)} series registradas</span></div></div><div className="header-actions"><button disabled={locked} onClick={finish} className="primary">Finalizar sesión ↗</button><button disabled={locked} onClick={cancelWorkout} className="cancel-workout">Cancelar entrenamiento</button></div></div>
+    <ErrorNotice message={error || actionError} />
+    {editing && !editVisible && <button onClick={()=>setEditVisible(true)}>Continuar edición de serie</button>}
+    {busy && <p role="status" className="muted">Guardando cambio…</p>}
+    {seconds > 0 && <div className="rest-timer" role="timer" aria-label="Tiempo de descanso restante"><div><p className="eyebrow">RECUPERA EL AIRE</p><b>Tu siguiente serie te espera.</b></div><span className="rest-clock">{Math.floor(seconds/60)}:{String(seconds%60).padStart(2,'0')}</span><button disabled={locked} onClick={skipRest}>Omitir descanso</button><div className="rest-track" aria-hidden="true"><span style={{width:(seconds/165*100)+'%'}} /></div></div>}
     <div className="workout-layout"><div className="workout-content">
       <div className="section-heading"><h2>Tu entrenamiento</h2><span className="eyebrow">{workout.routine.name}</span></div>
-      <div className="session">{workout.exercises.map(item=> { const ref=reference(item), type=typeFor(item); return <section className={'exercise-card '+(item.skipped ? 'skip' : '')} key={item.id}>
+      <div className="session">{workout.exercises.map(item=> { const ref=reference(item), type=typeFor(item); return <section className={'exercise-card '+(item.skipped ? 'skip' : '')} key={item.id}><fieldset className="exercise-fields" disabled={locked}>
         <div className="exercise-heading"><span className="exercise-number">{String(item.position).padStart(2,'0')}</span><h2>{item.exercise_name_snapshot}</h2></div>
         <div className="exercise-toolbar"><span className="badge">{item.skipped ? 'Omitido' : item.sets.length+' series'}</span><div className="exercise-actions"><button aria-label={'Mover arriba: '+item.exercise_name_snapshot} onClick={()=>move(item,-1)} disabled={item.position===1}>↑</button><button aria-label={'Mover abajo: '+item.exercise_name_snapshot} onClick={()=>move(item,1)} disabled={item.position===workout.exercises.length}>↓</button><button onClick={()=>toggle(item)}>{item.skipped ? 'Reanudar' : 'Saltar'}</button></div></div>
         {!item.skipped && <>
@@ -260,13 +280,14 @@ const loadReference = () => { setReferenceError(''); Promise.all([api(`/routines
           <div className="quick">
             <label className="field weight-type"><span>Tipo de carga</span><select value={type} onChange={event=>setWeightTypes({...weightTypes,[item.id]:event.target.value as WeightType})}>{(['EXTERNAL','BODYWEIGHT','BODYWEIGHT_PLUS','BODYWEIGHT_ASSISTED'] as WeightType[]).map(option=><option key={option} value={option}>{weightLabel(option)}</option>)}</select><small>{weightLabel(type)}</small></label>
             {type!=='BODYWEIGHT' && <label className="field"><span>Peso <small>({convention(item)})</small></span><input aria-label={'Peso: '+item.exercise_name_snapshot} inputMode="decimal" placeholder="0" value={weights[item.id] || ''} onChange={event=>setWeights({...weights,[item.id]:event.target.value})} /></label>}
-            <label className="field"><span>Repeticiones</span><input aria-label={'Repeticiones: '+item.exercise_name_snapshot} inputMode="numeric" placeholder="0" value={reps} onChange={event=>setReps(event.target.value)} /></label>
+            <label className="field"><span>Repeticiones</span><input aria-label={'Repeticiones: '+item.exercise_name_snapshot} inputMode="numeric" placeholder="0" value={reps[item.id]||''} onChange={event=>setReps({...reps,[item.id]:event.target.value})} /></label>
           </div>
-          <div className="record-row"><label className="checkbox-label"><input type="checkbox" checked={warm} onChange={event=>setWarm(event.target.checked)} />Calentamiento</label><button className="record" disabled={!reps} onClick={()=>add(item)}>＋ Registrar serie</button></div>
+          <div className="record-row"><label className="checkbox-label"><input type="checkbox" checked={warm[item.id]||false} onChange={event=>setWarm({...warm,[item.id]:event.target.checked})} />Calentamiento</label><button className="record" disabled={locked || !reps[item.id]} onClick={()=>add(item)}>＋ Registrar serie</button></div>
         </>}
-      </section> })}</div>
-      <button className="add" onClick={()=>setAdding(true)} aria-haspopup="dialog">＋ Agregar o sustituir ejercicio</button>
+      </fieldset></section> })}</div>
+      <button disabled={locked} className="add" onClick={()=>setAdding(true)} aria-haspopup="dialog">＋ Agregar o sustituir ejercicio</button>
     </div><RecentWorkoutReference workouts={recent} routineName={workout.routine.name} error={referenceError} retry={loadReference} /></div>
+    {editing && editVisible && <SetEditor draft={editing} change={setEditing} save={saveSet} close={()=>{setEditing(null);setEditVisible(false)}} suspend={()=>setEditVisible(false)}/>}
     {adding && <ExercisePicker catalog={catalog} choose={addExercise} custom={workout.routine.name==='FREE'?addCustomExercise:undefined} draft={customDraft} setDraft={setCustomDraft} close={()=>setAdding(false)} />}
   </main>
 }
