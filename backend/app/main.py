@@ -1,4 +1,5 @@
 from contextlib import asynccontextmanager
+from datetime import datetime, timedelta, timezone
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
@@ -139,9 +140,20 @@ def update_exercise(item_id:int, body:WorkoutExerciseUpdate, db:Session=Depends(
 def add_set(item_id:int, body:SetCreate, db:Session=Depends(get_db)):
     item=db.get(WorkoutExercise,item_id)
     if not item: raise HTTPException(404,"Ejercicio no encontrado")
-    if db.get(Workout,item.workout_id).ended_at: raise HTTPException(409,"La sesión ya terminó")
+    workout=db.get(Workout,item.workout_id)
+    if workout.ended_at: raise HTTPException(409,"La sesión ya terminó")
     position=(db.scalar(select(WorkoutSet.position).where(WorkoutSet.workout_exercise_id==item_id).order_by(WorkoutSet.position.desc())) or 0)+1
-    record=WorkoutSet(workout_exercise_id=item_id,position=position,**body.model_dump()); db.add(record); db.commit(); db.refresh(record); return record
+    now=datetime.now(timezone.utc)
+    workout.rest_until=now+timedelta(seconds=165)
+    record=WorkoutSet(workout_exercise_id=item_id,position=position,created_at=now,**body.model_dump()); db.add(record); db.commit(); db.refresh(record); return record
+
+@app.post("/workouts/{workout_id}/rest/skip", response_model=WorkoutOut)
+def skip_rest(workout_id:int, db:Session=Depends(get_db)):
+    workout=workout_or_404(db,workout_id)
+    if workout.ended_at: raise HTTPException(409,"La sesión ya terminó")
+    workout.rest_until=None
+    db.commit()
+    return workout_or_404(db,workout_id)
 
 @app.patch("/sets/{set_id}", response_model=SetOut)
 def update_set(set_id:int, body:SetUpdate, db:Session=Depends(get_db)):
@@ -161,4 +173,4 @@ def finish(workout_id:int, db:Session=Depends(get_db)):
     from datetime import datetime, timezone
     workout=workout_or_404(db,workout_id)
     if workout.ended_at: raise HTTPException(409,"La sesión ya terminó")
-    workout.ended_at=datetime.now(timezone.utc); db.commit(); return workout_or_404(db,workout_id)
+    workout.ended_at=datetime.now(timezone.utc); workout.rest_until=None; db.commit(); return workout_or_404(db,workout_id)

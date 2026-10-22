@@ -21,11 +21,11 @@ Ideas detectadas durante el uso real. Cada feature se definirá y entregará en 
 
 ## Tiempo de sesión y descanso de 2:45
 
-- Estado: pendiente.
+- Estado: implementado en PR #15; pendiente de aprobación.
 - Mostrar el tiempo transcurrido de la sesión en vivo.
 - Mostrar el descanso y reiniciarlo a 2 minutos y 45 segundos al registrar una nueva serie.
-- El descanso actual es de 3 minutos para series de trabajo; esta feature debe cambiar esa duración.
-- Alinear si los calentamientos también reinician el descanso antes de implementarlo.
+- Sustituye el descanso anterior de 3 minutos por 2:45 persistente en el servidor.
+- Cada serie nueva, incluidos calentamientos, reinicia el descanso según el requisito de cada registro. Editar una serie no lo reinicia.
 
 ## Continuidad al cambiar de aplicación y temporizador superpuesto
 

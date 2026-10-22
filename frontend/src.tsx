@@ -6,7 +6,7 @@ const API = '/api'
 type WeightType = 'EXTERNAL'|'BODYWEIGHT'|'BODYWEIGHT_PLUS'|'BODYWEIGHT_ASSISTED'
 type WorkoutSet = { id:number; position:number; reps:number; load_value:number|null; load_unit:'kg'|'lb'; weight_type:WeightType; set_type:string }
 type WorkoutExercise = { id:number; exercise_id:number|null; exercise_name_snapshot:string; position:number; skipped:boolean; sets:WorkoutSet[] }
-type Workout = { id:number; routine_id:number; started_at:string; ended_at:string|null; notes:string|null; routine:{name:string}; exercises:WorkoutExercise[] }
+type Workout = { id:number; routine_id:number; started_at:string; ended_at:string|null; rest_until:string|null; notes:string|null; routine:{name:string}; exercises:WorkoutExercise[] }
 type Exercise = { id:number; name:string; load_convention:'TOTAL'|'PER_HAND' }
 
 class ApiError extends Error {
@@ -23,8 +23,10 @@ async function api(path:string, options:RequestInit = {}) {
   }
   return response.status === 204 ? null : response.json()
 }
-function formatDate(date:string) { return new Intl.DateTimeFormat('es-MX', { weekday:'long', day:'numeric', month:'long', year:'numeric' }).format(new Date(date)) }
-function duration(workout:Workout) { if (!workout.ended_at) return ''; const minutes = Math.max(0, Math.round((new Date(workout.ended_at).getTime() - new Date(workout.started_at).getTime()) / 60000)); return minutes >= 60 ? [`${Math.floor(minutes / 60)} h`, minutes % 60 ? `${minutes % 60} min` : ''].filter(Boolean).join(' ') : `${minutes} min` }
+function timestamp(date:string) { return new Date(/(?:Z|[+-]\d{2}:\d{2})$/.test(date)?date:date+'Z').getTime() }
+function clock(seconds:number) { return [Math.floor(seconds/3600),Math.floor(seconds/60)%60,seconds%60].map(value=>String(value).padStart(2,'0')).join(':') }
+function formatDate(date:string) { return new Intl.DateTimeFormat('es-MX', { weekday:'long', day:'numeric', month:'long', year:'numeric' }).format(new Date(timestamp(date))) }
+function duration(workout:Workout) { if (!workout.ended_at) return ''; const minutes = Math.max(0, Math.round((timestamp(workout.ended_at) - timestamp(workout.started_at)) / 60000)); return minutes >= 60 ? [`${Math.floor(minutes / 60)} h`, minutes % 60 ? `${minutes % 60} min` : ''].filter(Boolean).join(' ') : `${minutes} min` }
 function weightLabel(type:WeightType) { return ({ EXTERNAL:'Carga externa', BODYWEIGHT:'Peso corporal', BODYWEIGHT_PLUS:'Peso corporal + carga', BODYWEIGHT_ASSISTED:'Peso corporal asistido' })[type] }
 function referenceSetLabel(set:WorkoutSet) { if (set.weight_type === 'BODYWEIGHT') return `${set.reps}×peso corporal`; if (set.weight_type === 'BODYWEIGHT_PLUS') return `${set.reps}×peso corporal + ${set.load_value ?? 0} ${set.load_unit}`; if (set.weight_type === 'BODYWEIGHT_ASSISTED') return `${set.reps}×${set.load_value ?? 0} ${set.load_unit} de asistencia`; return `${set.reps}×${set.load_value ?? 'carga sin registrar'}${set.load_value != null ? ' '+set.load_unit : ''}` }
 
@@ -196,16 +198,16 @@ function ExercisePicker({catalog,choose,custom,close,draft,setDraft}:{catalog:Ex
 }
 
 function Session({ workout, refresh, finish, cancelWorkout, error, browse }:{ workout:Workout; refresh:() => Promise<void>; finish:() => void; cancelWorkout:() => void; error:string; browse:()=>void }) {
-  const [weights, setWeights] = useState<Record<number,string>>({}), [weightTypes, setWeightTypes] = useState<Record<number,WeightType>>({}), [reps, setReps] = useState(''), [warm, setWarm] = useState(false), [adding, setAdding] = useState(false), [catalog, setCatalog] = useState<Exercise[]>([]), [recent, setRecent] = useState<Workout[]>([]), [referenceError, setReferenceError] = useState(''), [restUntil, setRestUntil] = useState<number|null>(null), [now, setNow] = useState(Date.now())
+  const [weights, setWeights] = useState<Record<number,string>>({}), [weightTypes, setWeightTypes] = useState<Record<number,WeightType>>({}), [reps, setReps] = useState(''), [warm, setWarm] = useState(false), [adding, setAdding] = useState(false), [catalog, setCatalog] = useState<Exercise[]>([]), [recent, setRecent] = useState<Workout[]>([]), [referenceError, setReferenceError] = useState(''), [now, setNow] = useState(Date.now())
 const loadReference = () => { setReferenceError(''); Promise.all([api(`/routines/${workout.routine_id}/recent-workouts?limit=2`), api('/exercises')]).then(([recentWorkouts, exercises]) => { setRecent(recentWorkouts); setCatalog(exercises); const previous = recentWorkouts[0], nextWeights:Record<number,string> = {}, nextTypes:Record<number,WeightType> = {}; workout.exercises.forEach(item => { const previousExercise = previous?.exercises.find((exercise:WorkoutExercise) => exercise.exercise_id === item.exercise_id); const suggestion = previousExercise?.sets.slice().reverse().find((set:WorkoutSet) => set.set_type === 'WORKING' && set.load_unit === 'lb'); if (suggestion) { if (suggestion.load_value != null) nextWeights[item.id] = String(suggestion.load_value); nextTypes[item.id] = suggestion.weight_type } }); setWeights(current => ({ ...nextWeights, ...current })); setWeightTypes(current => ({ ...nextTypes, ...current })) }).catch((err:any) => setReferenceError(err.message)) }
   useEffect(() => { loadReference() }, [workout.id])
-  useEffect(() => { if (!restUntil) return; const timer = window.setInterval(() => setNow(Date.now()), 1000); return () => window.clearInterval(timer) }, [restUntil])
+  useEffect(() => { const timer = window.setInterval(() => setNow(Date.now()), 1000); return () => window.clearInterval(timer) }, [])
   const [customDraft,setCustomDraft]=useState<ExerciseDraft>({name:'',convention:'TOTAL'})
   const reference = (item:WorkoutExercise) => { const found = recent[0]?.exercises.find(exercise => exercise.exercise_id === item.exercise_id); return found?.sets.slice().reverse().find(set => set.set_type === 'WORKING') }
   const exercise = (item:WorkoutExercise) => catalog.find(entry => entry.id === item.exercise_id)
   const convention = (item:WorkoutExercise) => exercise(item)?.load_convention === 'PER_HAND' ? 'lb por mano' : 'lb totales'
   const typeFor = (item:WorkoutExercise):WeightType => weightTypes[item.id] || 'EXTERNAL'
-  const add = async (item:WorkoutExercise) => { try { const type = typeFor(item); await api(`/workout-exercises/${item.id}/sets`, { method:'POST', body:JSON.stringify({ reps:Number(reps), load_value:type === 'BODYWEIGHT' ? null : weights[item.id] ? Number(weights[item.id]) : null, load_unit:'lb', weight_type:type, set_type:warm ? 'WARMUP' : 'WORKING' }) }); if (!warm) setRestUntil(Date.now() + 180000); setReps(''); setWarm(false); await refresh() } catch (err:any) { alert(err.message) } }
+  const add = async (item:WorkoutExercise) => { try { const type = typeFor(item); await api(`/workout-exercises/${item.id}/sets`, { method:'POST', body:JSON.stringify({ reps:Number(reps), load_value:type === 'BODYWEIGHT' ? null : weights[item.id] ? Number(weights[item.id]) : null, load_unit:'lb', weight_type:type, set_type:warm ? 'WARMUP' : 'WORKING' }) }); setReps(''); setWarm(false); await refresh() } catch (err:any) { alert(err.message) } }
   const editSet = async (set:WorkoutSet) => { const nextReps = prompt('Repeticiones', String(set.reps)); if (!nextReps) return; const nextLoad = set.load_value == null ? null : prompt(`Peso (${set.load_unit})`, String(set.load_value)); await api(`/sets/${set.id}`, { method:'PATCH', body:JSON.stringify({ reps:Number(nextReps), load_value:nextLoad === null ? null : Number(nextLoad) }) }); refresh() }
   const deleteSet = async (set:WorkoutSet) => { if (confirm('¿Eliminar esta serie?')) { await api(`/sets/${set.id}`, { method:'DELETE' }); refresh() } }
   const move = async (item:WorkoutExercise, direction:number) => { await api(`/workout-exercises/${item.id}`, { method:'PATCH', body:JSON.stringify({ position:Math.max(1, item.position + direction) }) }); refresh() }
@@ -216,13 +218,15 @@ const loadReference = () => { setReferenceError(''); Promise.all([api(`/routines
     setCatalog(current=>current.some(entry=>entry.id===item.exercise_id)?current:[...current,{id:item.exercise_id,name:item.exercise_name_snapshot,load_convention:convention}])
     setCustomDraft({name:'',convention:'TOTAL'});setAdding(false);await refresh()
   }
-  const seconds = restUntil ? Math.max(0, Math.ceil((restUntil - now) / 1000)) : 0
+  const seconds = workout.rest_until ? Math.max(0, Math.ceil((timestamp(workout.rest_until) - now) / 1000)) : 0
+  const elapsed = Math.max(0,Math.floor((now-timestamp(workout.started_at))/1000))
+  const skipRest = async()=>{try {await api(`/workouts/${workout.id}/rest/skip`,{method:'POST'});await refresh()}catch(err){alert(err instanceof Error?err.message:'No se pudo omitir el descanso')}}
 
   return <main className="workout-page">
     <header className="topbar"><Brand /><div className="session-navigation"><span className="live-badge"><i /> SESIÓN EN CURSO</span><button onClick={browse}>Explorar app</button></div></header>
-    <div className="session-title"><div><p className="eyebrow">HOY TOCA</p><h1>{routineInfo[workout.routine.name]?.title || workout.routine.name}<em>.</em></h1><div className="session-metrics"><span>{workout.exercises.length} ejercicios</span><span>{workout.exercises.reduce((total,item)=>total+item.sets.length,0)} series registradas</span></div></div><div className="header-actions"><button onClick={finish} className="primary">Finalizar sesión ↗</button><button onClick={cancelWorkout} className="cancel-workout">Cancelar entrenamiento</button></div></div>
+    <div className="session-title"><div><p className="eyebrow">HOY TOCA</p><h1>{routineInfo[workout.routine.name]?.title || workout.routine.name}<em>.</em></h1><div className="session-metrics"><span role="timer" aria-label="Tiempo de sesión">{clock(elapsed)}</span><span>{workout.exercises.length} ejercicios</span><span>{workout.exercises.reduce((total,item)=>total+item.sets.length,0)} series registradas</span></div></div><div className="header-actions"><button onClick={finish} className="primary">Finalizar sesión ↗</button><button onClick={cancelWorkout} className="cancel-workout">Cancelar entrenamiento</button></div></div>
     <ErrorNotice message={error} />
-    {seconds > 0 && <div className="rest-timer" role="timer" aria-label="Tiempo de descanso restante"><div><p className="eyebrow">RECUPERA EL AIRE</p><b>Tu siguiente serie te espera.</b></div><span className="rest-clock">{Math.floor(seconds/60)}:{String(seconds%60).padStart(2,'0')}</span><button onClick={()=>setRestUntil(null)}>Omitir descanso</button><div className="rest-track" aria-hidden="true"><span style={{width:(seconds/180*100)+'%'}} /></div></div>}
+    {seconds > 0 && <div className="rest-timer" role="timer" aria-label="Tiempo de descanso restante"><div><p className="eyebrow">RECUPERA EL AIRE</p><b>Tu siguiente serie te espera.</b></div><span className="rest-clock">{Math.floor(seconds/60)}:{String(seconds%60).padStart(2,'0')}</span><button onClick={skipRest}>Omitir descanso</button><div className="rest-track" aria-hidden="true"><span style={{width:(seconds/165*100)+'%'}} /></div></div>}
     <div className="workout-layout"><div className="workout-content">
       <div className="section-heading"><h2>Tu entrenamiento</h2><span className="eyebrow">{workout.routine.name}</span></div>
       <div className="session">{workout.exercises.map(item=> { const ref=reference(item), type=typeFor(item); return <section className={'exercise-card '+(item.skipped ? 'skip' : '')} key={item.id}>

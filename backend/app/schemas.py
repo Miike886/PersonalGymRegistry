@@ -40,4 +40,4 @@ class WorkoutExerciseCreate(BaseModel):
 class WorkoutExerciseUpdate(BaseModel): position:int|None=Field(default=None,ge=1); skipped:bool|None=None
 class WorkoutExerciseOut(ORMModel): id:int; exercise_id:int|None; exercise_name_snapshot:str; position:int; skipped:bool; sets:list[SetOut]=[]
 class WorkoutCreate(BaseModel): routine_id:int; notes:str|None=None
-class WorkoutOut(ORMModel): id:int; routine_id:int; started_at:datetime; ended_at:datetime|None; notes:str|None; routine:RoutineOut; exercises:list[WorkoutExerciseOut]=[]
+class WorkoutOut(ORMModel): id:int; routine_id:int; started_at:datetime; ended_at:datetime|None; rest_until:datetime|None; notes:str|None; routine:RoutineOut; exercises:list[WorkoutExerciseOut]=[]
