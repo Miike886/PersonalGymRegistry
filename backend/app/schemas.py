@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import Literal
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from .models import LoadConvention, SetType, WeightType
 
 class ORMModel(BaseModel): model_config = ConfigDict(from_attributes=True)
@@ -21,7 +21,22 @@ class SetUpdate(BaseModel):
         if value is None: raise ValueError("La unidad no puede ser nula")
         return value
 class SetOut(SetCreate, ORMModel): id:int; position:int; created_at:datetime
-class WorkoutExerciseCreate(BaseModel): exercise_id:int; position:int|None=None
+class WorkoutExerciseCreate(BaseModel):
+    exercise_id:int|None=Field(default=None,gt=0)
+    name:str|None=Field(default=None,min_length=1,max_length=100)
+    load_convention:LoadConvention=LoadConvention.TOTAL
+    position:int|None=Field(default=None,ge=1)
+
+    @field_validator("name",mode="before")
+    @classmethod
+    def normalize_name(cls,value):
+        return " ".join(value.split()) if isinstance(value,str) else value
+
+    @model_validator(mode="after")
+    def exactly_one_exercise_source(self):
+        if (self.exercise_id is None)==(self.name is None):
+            raise ValueError("Indica un ejercicio del catálogo o un nombre nuevo")
+        return self
 class WorkoutExerciseUpdate(BaseModel): position:int|None=Field(default=None,ge=1); skipped:bool|None=None
 class WorkoutExerciseOut(ORMModel): id:int; exercise_id:int|None; exercise_name_snapshot:str; position:int; skipped:bool; sets:list[SetOut]=[]
 class WorkoutCreate(BaseModel): routine_id:int; notes:str|None=None
