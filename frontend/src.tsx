@@ -107,18 +107,17 @@ function App() {
 }
 
 function WorkoutApp({authVersion}:{authVersion:number}) {
-  const [active, setActive] = useState<Workout|null>(null), [routines, setRoutines] = useState<any[]>([]), [history, setHistory] = useState<Workout[]>([]), [selected, setSelected] = useState<Workout|null>(null), [view, setView] = useState<'home'|'history'|'detail'>('home'), [error, setError] = useState(''), [loadingDetail, setLoadingDetail] = useState(false)
-  const load = async () => { try { setError(''); setActive(await api('/workouts/active')); setRoutines(await api('/routines')); setHistory(await api('/workouts')) } catch (err:any) { setError(err.message) } }
+  const [active, setActive] = useState<Workout|null>(null), [routines, setRoutines] = useState<any[]>([]), [history, setHistory] = useState<Workout[]>([]), [selected, setSelected] = useState<Workout|null>(null), [view, setView] = useState<'home'|'history'|'detail'|'session'>('home'), [error, setError] = useState(''), [loadingDetail, setLoadingDetail] = useState(false)
+  const initialLoad = useRef(true)
+  const load = async () => { try { setError(''); const current=await api('/workouts/active'); setActive(current); if(initialLoad.current) { setView(current ? 'session' : 'home'); initialLoad.current=false } setRoutines(await api('/routines')); setHistory(await api('/workouts')) } catch (err:any) { setError(err.message) } }
   useEffect(() => { load() }, [authVersion])
-  const start = async (routineId:number) => { try { setActive(await api('/workouts', { method:'POST', body:JSON.stringify({ routine_id:routineId }) })) } catch (err:any) { setError(err.message) } }
-  const finish = async () => { if (active && confirm('¿Finalizar entrenamiento?')) { await api(`/workouts/${active.id}/finish`, { method:'POST' }); setActive(null); load() } }
-  const cancelWorkout = async () => { if (active && confirm('¿Cancelar este entrenamiento? Se eliminarán todas las series registradas.')) { try { setError(''); await api(`/workouts/${active.id}`, { method:'DELETE' }); setActive(null); await load() } catch (err:any) { setError(err.message) } } }
+  const start = async (routineId:number) => { try { setActive(await api('/workouts', { method:'POST', body:JSON.stringify({ routine_id:routineId }) })); setView('session') } catch (err:any) { setError(err.message) } }
+  const finish = async () => { if (active && confirm('¿Finalizar entrenamiento?')) { await api(`/workouts/${active.id}/finish`, { method:'POST' }); setActive(null); setView('history'); load() } }
+  const cancelWorkout = async () => { if (active && confirm('¿Cancelar este entrenamiento? Se eliminarán todas las series registradas.')) { try { setError(''); await api(`/workouts/${active.id}`, { method:'DELETE' }); setActive(null); setView('home'); await load() } catch (err:any) { setError(err.message) } } }
   const deleteWorkout = async (workout:Workout) => { if (confirm('¿Eliminar este entrenamiento del historial? Esta acción no se puede deshacer.')) { try { setError(''); await api(`/workouts/${workout.id}`, { method:'DELETE' }); setSelected(null); setView('history'); await load() } catch (err:any) { setError(err.message) } } }
   const openDetail = async (workoutId:number) => { try { setError(''); setLoadingDetail(true); setSelected(await api(`/workouts/${workoutId}`)); setView('detail') } catch (err:any) { setError(err.message) } finally { setLoadingDetail(false) } }
-  if (active) return <Session workout={active} refresh={load} finish={finish} cancelWorkout={cancelWorkout} error={error} />
-  if (view === 'detail' && selected) return <WorkoutDetail workout={selected} back={() => setView('history')} deleteWorkout={deleteWorkout} error={error} />
 
-  return <main>
+  return <><div className={active ? 'browsing-active' : ''} hidden={view==='session'}>{view==='detail' && selected ? <WorkoutDetail workout={selected} back={()=>setView('history')} deleteWorkout={deleteWorkout} error={error}/> : <main>
     <header className="topbar"><Brand /><nav aria-label="Navegación principal"><button className={view === 'home' ? 'nav-active' : ''} onClick={() => setView('home')}>Entrenar</button><button className={view === 'history' ? 'nav-active' : ''} onClick={() => setView('history')}>Historial</button></nav></header>
     <ErrorNotice message={error} />
     <div className="hero"><div><p className="eyebrow">{view === 'home' ? 'TU PRÓXIMA SESIÓN' : 'TU RECORRIDO'}</p><h1>{view === 'home' ? <>Cada serie<br /><em>cuenta.</em></> : <>Trabajo hecho.<br /><em>Fuerza ganada.</em></>}</h1><p className="hero-description">{view === 'home' ? 'Elige tu rutina. Encuentra tu ritmo. Hazla tuya.' : 'Vuelve a tus entrenamientos y encuentra tu referencia.'}</p></div><div className="hero-art" aria-hidden="true"><span>///</span><small>KEEP SHOWING UP</small></div></div>
@@ -130,14 +129,17 @@ function WorkoutApp({authVersion}:{authVersion:number}) {
       </button>)}</div> : <div className="empty-state"><span aria-hidden="true">↗</span><h3>Tu recorrido empieza aquí</h3><p>Al finalizar tu primer entrenamiento, podrás consultarlo en este espacio.</p><button className="primary" onClick={() => setView('home')}>Elegir rutina</button></div>}
     </> : <>
       <div className="section-heading"><h2>El entrenamiento de hoy</h2><span className="eyebrow">A TU RITMO</span></div>
-      <div className="routine-grid">{routines.map(routine => { const info= routineInfo[routine.name]; return <button className="routine" data-routine={routine.name} key={routine.id} onClick={() => start(routine.id)}>
+      <div className="routine-grid">{routines.map(routine => { const info= routineInfo[routine.name]; return <button className="routine" data-routine={routine.name} key={routine.id} disabled={!!active} onClick={() => start(routine.id)}>
         <span className="routine-top"><span className="routine-tag">{routine.name}</span><span className="routine-number" aria-hidden="true">{info?.number || '↗'}</span></span>
         <span className="routine-title">{info?.title || routine.name}</span><span className="routine-description">{info?.subtitle || 'Una sesión para ti'}</span>
         <span className="routine-footer"><span>{routine.exercises.length ? routine.exercises.length + ' ejercicios' : 'Empieza vacío'}</span><span className="round-arrow" aria-hidden="true">↗</span></span>
       </button> })}</div>
     </>}
     <footer className="page-footer"><Brand /><span>UNA SERIE A LA VEZ.</span></footer>
-  </main>
+  </main>}</div>
+    {active && <div hidden={view!=='session'}><Session workout={active} refresh={load} finish={finish} cancelWorkout={cancelWorkout} error={error} browse={()=>setView('home')}/></div>}
+    {active && view!=='session' && <button className="resume-session" onClick={()=>setView('session')}>● Retomar {active.routine.name} <span>Entrenamiento en curso ↗</span></button>}
+  </>
 }
 
 
@@ -177,7 +179,7 @@ function ExercisePicker({catalog,choose,close}:{catalog:Exercise[];choose:(id:nu
   </dialog>
 }
 
-function Session({ workout, refresh, finish, cancelWorkout, error }:{ workout:Workout; refresh:() => Promise<void>; finish:() => void; cancelWorkout:() => void; error:string }) {
+function Session({ workout, refresh, finish, cancelWorkout, error, browse }:{ workout:Workout; refresh:() => Promise<void>; finish:() => void; cancelWorkout:() => void; error:string; browse:()=>void }) {
   const [weights, setWeights] = useState<Record<number,string>>({}), [weightTypes, setWeightTypes] = useState<Record<number,WeightType>>({}), [reps, setReps] = useState(''), [warm, setWarm] = useState(false), [adding, setAdding] = useState(false), [catalog, setCatalog] = useState<Exercise[]>([]), [recent, setRecent] = useState<Workout[]>([]), [referenceError, setReferenceError] = useState(''), [restUntil, setRestUntil] = useState<number|null>(null), [now, setNow] = useState(Date.now())
 const loadReference = () => { setReferenceError(''); Promise.all([api(`/routines/${workout.routine_id}/recent-workouts?limit=2`), api('/exercises')]).then(([recentWorkouts, exercises]) => { setRecent(recentWorkouts); setCatalog(exercises); const previous = recentWorkouts[0], nextWeights:Record<number,string> = {}, nextTypes:Record<number,WeightType> = {}; workout.exercises.forEach(item => { const previousExercise = previous?.exercises.find((exercise:WorkoutExercise) => exercise.exercise_id === item.exercise_id); const suggestion = previousExercise?.sets.slice().reverse().find((set:WorkoutSet) => set.set_type === 'WORKING' && set.load_unit === 'lb'); if (suggestion) { if (suggestion.load_value != null) nextWeights[item.id] = String(suggestion.load_value); nextTypes[item.id] = suggestion.weight_type } }); setWeights(current => ({ ...nextWeights, ...current })); setWeightTypes(current => ({ ...nextTypes, ...current })) }).catch((err:any) => setReferenceError(err.message)) }
   useEffect(() => { loadReference() }, [workout.id])
@@ -195,7 +197,7 @@ const loadReference = () => { setReferenceError(''); Promise.all([api(`/routines
   const seconds = restUntil ? Math.max(0, Math.ceil((restUntil - now) / 1000)) : 0
 
   return <main className="workout-page">
-    <header className="topbar"><Brand /><span className="live-badge"><i /> SESIÓN EN CURSO</span></header>
+    <header className="topbar"><Brand /><div className="session-navigation"><span className="live-badge"><i /> SESIÓN EN CURSO</span><button onClick={browse}>Explorar app</button></div></header>
     <div className="session-title"><div><p className="eyebrow">HOY TOCA</p><h1>{routineInfo[workout.routine.name]?.title || workout.routine.name}<em>.</em></h1><div className="session-metrics"><span>{workout.exercises.length} ejercicios</span><span>{workout.exercises.reduce((total,item)=>total+item.sets.length,0)} series registradas</span></div></div><div className="header-actions"><button onClick={finish} className="primary">Finalizar sesión ↗</button><button onClick={cancelWorkout} className="cancel-workout">Cancelar entrenamiento</button></div></div>
     <ErrorNotice message={error} />
     {seconds > 0 && <div className="rest-timer" role="timer" aria-label="Tiempo de descanso restante"><div><p className="eyebrow">RECUPERA EL AIRE</p><b>Tu siguiente serie te espera.</b></div><span className="rest-clock">{Math.floor(seconds/60)}:{String(seconds%60).padStart(2,'0')}</span><button onClick={()=>setRestUntil(null)}>Omitir descanso</button><div className="rest-track" aria-hidden="true"><span style={{width:(seconds/180*100)+'%'}} /></div></div>}
