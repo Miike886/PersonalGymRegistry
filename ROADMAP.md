@@ -37,7 +37,7 @@ Ideas detectadas durante el uso real. Cada feature se definirá y entregará en 
 
 ## Gráficas y exploración del progreso
 
-- Estado: pendiente de definición.
+- Estado: gráficas con filtros y métricas conservadoras implementadas en PR #18; pendiente de aprobación.
 - Visualizaciones del entrenamiento a lo largo del tiempo.
 - Consultas por ejercicio, sesión y periodos de tiempo.
 - Alinear las métricas concretas y cómo comparar cargas totales, por mano, asistidas y de peso corporal.
