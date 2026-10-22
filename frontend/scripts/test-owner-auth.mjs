@@ -17,6 +17,7 @@ const origin = 'http://localhost:4179'
 const environment = {
   ...process.env, DATABASE_URL:'sqlite:///' + database,
   APP_ENV:'development', OWNER_USERNAME:'browser-owner',
+  OWNER_PASSWORD_HASH:'', OWNER_SETUP_TOKEN:'browser-test-activation-token-928',
   CORS_ORIGINS:origin, ALLOWED_HOSTS:'localhost,127.0.0.1',
 }
 
@@ -25,7 +26,6 @@ function pythonCommand(args) {
   if (result.status !== 0) throw new Error(result.stderr || 'Test Python command failed')
   return result.stdout.trim()
 }
-environment.OWNER_PASSWORD_HASH = pythonCommand(['-c', 'from app.auth import password_hasher; print(password_hasher.hash("' + password + '"))'])
 let apiServer, frontendServer, browser
 let serverErrors = ''
 function start(command, args, cwd, env) {
@@ -67,7 +67,28 @@ try {
   }
   monitor(page)
   await page.goto(origin)
+  await page.getByRole('heading',{name:'Crear mi cuenta',exact:true}).waitFor()
+  await page.getByLabel('Usuario',{exact:true}).fill('browser-owner')
+  await page.getByLabel('Contraseña',{exact:true}).fill(password)
+  await page.getByLabel('Confirmar contraseña',{exact:true}).fill(password+'x')
+  await page.getByLabel('Código de activación',{exact:true}).fill('wrong-browser-activation-code')
+  await page.getByRole('button',{name:'Crear cuenta y entrar'}).click()
+  await page.getByRole('alert').filter({hasText:'Las contraseñas no coinciden'}).waitFor()
+  await page.getByLabel('Confirmar contraseña',{exact:true}).fill(password)
+  await page.getByRole('button',{name:'Crear cuenta y entrar'}).click()
+  await page.getByRole('alert').filter({hasText:'Código de activación incorrecto'}).waitFor()
+  await page.getByLabel('Código de activación',{exact:true}).fill(environment.OWNER_SETUP_TOKEN)
+  await mkdir(path.join(frontend,'node_modules/.cache'),{recursive:true})
+  await page.screenshot({path:path.join(frontend,'node_modules/.cache/owner-registration-375.png'),fullPage:true})
+  await page.getByRole('button',{name:'Crear cuenta y entrar'}).click()
+  await page.getByRole('button',{name:/PUSH.*Empuje/}).waitFor()
+  assert.equal((await context.request.get(origin+'/api/workouts')).status(),200)
+  assert.equal((await (await context.request.get(origin+'/api/workouts')).json()).length,2)
+  assert.equal((await context.request.get(origin+'/api/auth/registration')).ok(),true)
+  assert.deepEqual(await (await context.request.get(origin+'/api/auth/registration')).json(),{available:false,configured:true})
+  await page.getByRole('button',{name:'Cerrar sesión',exact:true}).click()
   await page.getByRole('heading',{name:'Iniciar sesión',exact:true}).waitFor()
+  assert.equal(await page.getByRole('button',{name:'Crear mi cuenta',exact:true}).count(),0)
   assert.equal((await context.request.get(origin+'/api/workouts')).status(),401)
   assert.equal((await context.request.get('http://127.0.0.1:8319/workouts')).status(),401)
   await page.getByLabel('Usuario',{exact:true}).fill('browser-owner')
@@ -236,7 +257,7 @@ try {
   const catalog=await (await context.request.get(origin+'/api/exercises')).json()
   assert.equal(catalog.find(item=>item.name==='Ejercicio libre de prueba')?.load_convention,'PER_HAND')
   assert.deepEqual(errors,[])
-  console.log('PASS: real login/proxy, anonymous denial, wrong password, persistent browser session, CSRF, expired-session re-login with preserved inputs, recording/recovery, logout, independent exercise drafts, safe edit cancellation/save, failed-record retry, double-submit guard, calendars/charts and responsive widths.')
+  console.log('PASS: single-owner registration, confirmation/activation errors, preserved history, closed registration, real login/proxy, anonymous denial, wrong password, persistent browser session, CSRF, expired-session re-login with preserved inputs, recording/recovery, logout, independent exercise drafts, safe edits, failed-record retry, double-submit guard, calendars/charts and responsive widths.')
 } catch(error) {
   console.error(error)
   throw error

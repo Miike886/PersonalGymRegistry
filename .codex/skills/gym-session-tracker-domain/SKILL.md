@@ -30,6 +30,7 @@ Use this skill whenever a change affects the Gym Session Tracker domain model, A
 - Every newly recorded set, including warmups, starts a 165-second rest deadline saved by the server in the same transaction. Editing/deleting sets does not restart rest. Skip and finish clear it; elapsed time derives from started_at, never accumulated browser ticks.
 - Browsing other screens while a workout is active must preserve the session, typed draft inputs and rest state; resuming does not create another workout.
 - Workout data is private to the single configured owner; all API reads and writes require a server-validated session. Logout or authentication expiry never finishes or cancels an active workout.
+- The sole owner may register once using a private server-configured activation code. Registration preserves existing workouts, revokes prior sessions, and permanently closes further registration while the account exists. Stored owner credentials take precedence over legacy environment credentials; never expose an unguarded claim of existing history.
 - The normal mobile flow is weight confirmation, repetitions entry, and one tap to record. Preserve the selected/preloaded weight after a set.
 - Recent completed workout data is reference-only, excludes active sessions, and must not mutate current records.
 - Completed session contents are read-only in the API as well as UI; set edits/deletion and exercise reordering/skipping reject completed workouts. Explicit confirmed deletion of the whole workout remains allowed.

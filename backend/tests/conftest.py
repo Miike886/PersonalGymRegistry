@@ -26,6 +26,7 @@ def owner_hash():
 def isolated_database(monkeypatch, owner_hash):
     monkeypatch.setattr(settings, "owner_username", "owner")
     monkeypatch.setattr(settings, "owner_password_hash", owner_hash)
+    monkeypatch.setattr(settings, "owner_setup_token", "")
     monkeypatch.setattr(settings, "app_env", "development")
     monkeypatch.setattr(settings, "cors_origins", ORIGIN)
     monkeypatch.setattr(settings, "allowed_hosts", "testserver,localhost,127.0.0.1")
