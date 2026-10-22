@@ -35,5 +35,5 @@ Lleva a `main` las entregas ya implementadas y verificadas que se integraron ent
 
 - Verificado localmente: 51 pruebas backend (incluidas migraciones, unidades, timers y autorización); build TypeScript/Vite/PWA; pruebas de modelos de calendario y progreso; flujo real Edge/API/proxy con base temporal aislada, registro único, login, recuperación de sesión, navegación, temporizadores, calendario, gráficas y edición segura.
 - `git diff --check origin/main` pasa. El código de producto, configuración y CI coinciden con la rama acumulativa revisada; los ajustes adicionales son de documentación de integración y estados de entrega.
-- Quality-gate: pendiente de revisión de la PR creada y sus checks remotos.
-- PR de integración: pendiente de creación; destino explícito main. No se integra ni se despliega producción sin autorización adicional.
+- Quality-gate: revisados título, descripción, 42 archivos y diff de PR #21 contra main, documentos de features y reglas de dominio. Autorización, registro único, snapshots, unidades, historial de solo lectura, migraciones, temporizadores y recuperación móvil mantienen sus invariantes; sin hallazgos bloqueantes. Checks remotos se comprueban al entregar. La validación real de suspensión en iPhone/Android y activación de producción sigue siendo manual.
+- PR de integración: [#21](https://github.com/Miike886/PersonalGymRegistry/pull/21), abierta; destino explícito main. No se integra ni se despliega producción sin autorización adicional.
