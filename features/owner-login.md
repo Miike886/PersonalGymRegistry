@@ -48,4 +48,4 @@ Restrict all workout data to the owner while remembering a trusted phone/browser
 ## Delivery
 
 - Branch: feature/owner-login
-- Pull request: pending.
+- Pull request: [#11](https://github.com/Miike886/PersonalGymRegistry/pull/11) — open.
