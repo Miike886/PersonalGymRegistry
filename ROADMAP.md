@@ -57,7 +57,7 @@ Ideas detectadas durante el uso real. Cada feature se definirá y entregará en 
 
 ## Cargas en libras
 
-- Estado: pendiente de alinear el historial e implementar.
+- Estado: implementada en PR #12; pendiente de aprobación. La reinterpretación del historial anterior sigue pendiente de confirmación.
 - Usar lb por defecto, conforme al gimnasio del propietario.
 - Confirmar el significado de las cargas anteriores antes de convertirlas o cambiar sus etiquetas.
 - Detalle y criterios: [Cargas en libras](features/pounds-load-units.md).

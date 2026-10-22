@@ -37,4 +37,4 @@ Usar libras (lb) como unidad habitual de registro y consulta, conforme al gimnas
 
 - Estado: implementada, pendiente de revisión; la reinterpretación de cargas históricas queda diferida.
 - Rama: `feature/pounds-load-units` (base `feature/owner-login`).
-- Pull request: por crear tras verificación.
+- Pull request: [#12](https://github.com/Miike886/PersonalGymRegistry/pull/12), abierta; depende de #11.
