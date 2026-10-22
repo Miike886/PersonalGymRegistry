@@ -24,4 +24,4 @@
 ## Delivery
 
 - Branch: feature/free-text-exercises; base feature/active-session-navigation.
-- PR: pending.
+- PR: #14, stacked on #13. Backend: 35 tests pass; production build and real-browser custom creation pass. Quality gate: no blocking findings after reviewing API validation, snapshot behavior, dialog errors and PR diff. Exact-name races return 409; this is not a multilingual catalog deduplication service.

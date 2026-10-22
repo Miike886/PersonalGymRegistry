@@ -14,7 +14,7 @@ Ideas detectadas durante el uso real. Cada feature se definirá y entregará en 
 
 ## Ejercicio nuevo por texto libre
 
-- Estado: implementada en la siguiente PR apilada; pendiente de aprobación.
+- Estado: implementada en PR #14; pendiente de aprobación.
 - En una sesión FREE, permitir escribir un ejercicio que no existe en la lista desde el selector de agregar o sustituir.
 - Definir si se conserva en el catálogo para siguientes sesiones, cómo evitar duplicados y qué convención de carga usa.
 - Mantener su nombre como snapshot histórico de la sesión.
