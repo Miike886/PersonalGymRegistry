@@ -1,5 +1,6 @@
 from pathlib import Path
 import sqlite3
+import pytest
 from alembic import command
 from alembic.config import Config
 from app.config import settings
@@ -26,3 +27,10 @@ def test_auth_migration_preserves_workouts_and_can_be_reapplied(tmp_path, monkey
     command.upgrade(config, "head")
     with sqlite3.connect(database) as db:
         assert db.execute("SELECT COUNT(*) FROM login_throttle").fetchone() == (1,)
+        db.execute("INSERT INTO owner_account (id, username, password_hash) VALUES (1, 'registered-owner', 'saved-hash')")
+    command.upgrade(config, "head")
+    with pytest.raises(RuntimeError, match="Cannot remove registered owner credentials"):
+        command.downgrade(config, "0004")
+    with sqlite3.connect(database) as db:
+        assert db.execute("SELECT username, password_hash FROM owner_account").fetchone() == ('registered-owner', 'saved-hash')
+        assert db.execute("SELECT id FROM workouts").fetchall() == [(1,)]

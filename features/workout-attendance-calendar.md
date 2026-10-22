@@ -1,37 +1,26 @@
 # Calendario de asistencia
 
-## Propósito
+## Propósito y comportamiento
 
-Mostrar visualmente qué días se entrenó, a partir de las sesiones del historial.
+- Calendario mensual, de lunes a domingo, con días de asistencia destacados, cantidad de sesiones y acceso al detalle histórico.
+- Botones mes anterior/siguiente e Ir a hoy; selección accesible de cualquier día y mensaje vacío explícito.
+- Usa la fecha local de inicio. Dos sesiones en un día cuentan como un día de asistencia; los días muestran el número de sesiones.
+- Excluye sesiones activas y canceladas; deriva las marcas del mismo historial que actualiza finalizar/eliminar.
+- Navegable durante un entrenamiento sin perder borradores; Retomar sigue disponible.
 
-## Comportamiento previsto
+## Implementación y límites
 
-- Calendario mensual con los días que tienen entrenamientos finalizados destacados.
-- Navegación entre meses y selección de un día para consultar sus sesiones.
-- Mostrar el tipo de rutina y permitir abrir el detalle histórico existente.
-- Usar la fecha local de inicio del entrenamiento para ubicarlo en el calendario.
-- Excluir sesiones en curso o canceladas. Si se elimina una sesión del historial, actualizar su marca de asistencia.
-- Representar varias sesiones en un mismo día sin contarlas como días distintos.
+- Rejilla de botones semánticos responsive, sin nuevas dependencias.
+- Reutiliza GET /workouts autenticado: no nueva API, tabla ni migración. La escala actual de un propietario permite filtrar el historial completo en memoria.
+- No registro manual, planificación de rutinas ni cambio de fechas históricas. En volúmenes mayores se evaluará consulta por rango junto con paginación del historial.
 
-## Impacto de implementación por definir
+## Verificación
 
-- Revisar si la API de historial necesita consultas por rango de fechas.
-- Mantener coherencia entre calendario, historial y zona horaria.
-- Diseñar la navegación y los indicadores para pantallas móviles.
-
-## Límites
-
-- Feature futura: todavía no implementada.
-- La asistencia se deriva del historial; no se incluye registro manual de asistencia ni planificación de rutinas.
-
-## Criterios de verificación futuros
-
-- Días con una, varias o ninguna sesión; navegación de meses y cambios de año.
-- Fechas cercanas a medianoche y conversión a la zona horaria local.
-- Exclusión de sesiones activas/canceladas y actualización tras eliminar una sesión.
-- Accesibilidad y legibilidad de indicadores y controles móviles.
+- npm test ejecuta helpers reales: medianoche UTC/zona local, varias sesiones, exclusión de activas, eliminación y años bisiestos.
+- Navegador real: Inicio → Calendario → día con asistencia → detalle → Retomar conserva los datos introducidos.
+- Build TypeScript/PWA y regresiones backend antes de entrega; CI ejecuta pruebas del modelo de calendario.
 
 ## Entrega
 
-- Estado: pendiente de implementación.
-- Rama y pull request de implementación: por crear cuando se inicie esta slice.
+- Rama feature/workout-attendance-calendar, base feature/background-session-continuity; PR #17, integrada en su base; pendiente de [integración a main](../docs/integration-main.md).
+- Quality gate: sin hallazgos bloqueantes tras revisar contrato, fechas locales, exclusión de activas, botones accesibles y navegación conservando borradores. Pruebas locales pasan; CI se verifica antes de entrega global.

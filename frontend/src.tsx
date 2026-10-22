@@ -1,12 +1,16 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import './style.css'
+import {SetEditor,type EditDraft} from './set-editor'
+import { Progress } from './progress'
+import { AttendanceCalendar } from './attendance'
+import { clearDrafts, readDraft, saveDraft, useWallClock, FloatingTimer } from './session-continuity'
 
 const API = '/api'
 type WeightType = 'EXTERNAL'|'BODYWEIGHT'|'BODYWEIGHT_PLUS'|'BODYWEIGHT_ASSISTED'
-type WorkoutSet = { id:number; position:number; reps:number; load_value:number|null; weight_type:WeightType; set_type:string }
+type WorkoutSet = { id:number; position:number; reps:number; load_value:number|null; load_unit:'kg'|'lb'; weight_type:WeightType; set_type:string }
 type WorkoutExercise = { id:number; exercise_id:number|null; exercise_name_snapshot:string; position:number; skipped:boolean; sets:WorkoutSet[] }
-type Workout = { id:number; routine_id:number; started_at:string; ended_at:string|null; notes:string|null; routine:{name:string}; exercises:WorkoutExercise[] }
+type Workout = { id:number; routine_id:number; started_at:string; ended_at:string|null; rest_until:string|null; notes:string|null; routine:{name:string}; exercises:WorkoutExercise[] }
 type Exercise = { id:number; name:string; load_convention:'TOTAL'|'PER_HAND' }
 
 class ApiError extends Error {
@@ -23,10 +27,12 @@ async function api(path:string, options:RequestInit = {}) {
   }
   return response.status === 204 ? null : response.json()
 }
-function formatDate(date:string) { return new Intl.DateTimeFormat('es-MX', { weekday:'long', day:'numeric', month:'long', year:'numeric' }).format(new Date(date)) }
-function duration(workout:Workout) { if (!workout.ended_at) return ''; const minutes = Math.max(0, Math.round((new Date(workout.ended_at).getTime() - new Date(workout.started_at).getTime()) / 60000)); return minutes >= 60 ? [`${Math.floor(minutes / 60)} h`, minutes % 60 ? `${minutes % 60} min` : ''].filter(Boolean).join(' ') : `${minutes} min` }
+function timestamp(date:string) { return new Date(/(?:Z|[+-]\d{2}:\d{2})$/.test(date)?date:date+'Z').getTime() }
+function clock(seconds:number) { return [Math.floor(seconds/3600),Math.floor(seconds/60)%60,seconds%60].map(value=>String(value).padStart(2,'0')).join(':') }
+function formatDate(date:string) { return new Intl.DateTimeFormat('es-MX', { weekday:'long', day:'numeric', month:'long', year:'numeric' }).format(new Date(timestamp(date))) }
+function duration(workout:Workout) { if (!workout.ended_at) return ''; const minutes = Math.max(0, Math.round((timestamp(workout.ended_at) - timestamp(workout.started_at)) / 60000)); return minutes >= 60 ? [`${Math.floor(minutes / 60)} h`, minutes % 60 ? `${minutes % 60} min` : ''].filter(Boolean).join(' ') : `${minutes} min` }
 function weightLabel(type:WeightType) { return ({ EXTERNAL:'Carga externa', BODYWEIGHT:'Peso corporal', BODYWEIGHT_PLUS:'Peso corporal + carga', BODYWEIGHT_ASSISTED:'Peso corporal asistido' })[type] }
-function referenceSetLabel(set:WorkoutSet) { if (set.weight_type === 'BODYWEIGHT') return `${set.reps}×peso corporal`; if (set.weight_type === 'BODYWEIGHT_PLUS') return `${set.reps}×peso corporal + ${set.load_value ?? 0} kg`; if (set.weight_type === 'BODYWEIGHT_ASSISTED') return `${set.reps}×${set.load_value ?? 0} kg de asistencia`; return `${set.reps}×${set.load_value ?? 'carga sin registrar'}${set.load_value != null ? ' kg' : ''}` }
+function referenceSetLabel(set:WorkoutSet) { if (set.weight_type === 'BODYWEIGHT') return `${set.reps}×peso corporal`; if (set.weight_type === 'BODYWEIGHT_PLUS') return `${set.reps}×peso corporal + ${set.load_value ?? 0} ${set.load_unit}`; if (set.weight_type === 'BODYWEIGHT_ASSISTED') return `${set.reps}×${set.load_value ?? 0} ${set.load_unit} de asistencia`; return `${set.reps}×${set.load_value ?? 'carga sin registrar'}${set.load_value != null ? ' '+set.load_unit : ''}` }
 
 const routineInfo:Record<string,{title:string; subtitle:string; number:string}> = {
   PUSH: { title:'Empuje', subtitle:'Pecho · hombros · tríceps', number:'01' },
@@ -50,26 +56,48 @@ function WorkoutRows({ item }:{item:WorkoutExercise}) {
 
 function Login({done, notice, retry}:{done:(owner:{username:string})=>void;notice:string;retry:()=>void}) {
   const [username,setUsername]=useState(''), [password,setPassword]=useState(''), [remember,setRemember]=useState(true), [busy,setBusy]=useState(false), [error,setError]=useState('')
-  const submit=async (event:React.FormEvent)=>{
-    event.preventDefault(); setBusy(true); setError('')
+  const [registration,setRegistration]=useState(false), [available,setAvailable]=useState(false), [activation,setActivation]=useState(''), [confirmation,setConfirmation]=useState(''), [statusError,setStatusError]=useState('')
+  const loadStatus=async ()=>{
+    setStatusError('')
     try {
-      const owner=await api('/auth/login',{method:'POST',body:JSON.stringify({username,password,remember})})
-      setPassword(''); done(owner)
+      const status=await api('/auth/registration')
+      setAvailable(status.available)
+      setRegistration(status.available && !status.configured)
+      if (!status.available && !status.configured) setStatusError('La creación de tu cuenta aún no está habilitada. Falta activar el acceso en el servidor.')
+    } catch { setStatusError('No se pudo comprobar si puedes crear tu cuenta. Inténtalo de nuevo.') }
+  }
+  useEffect(()=>{loadStatus()},[])
+  const submit=async (event:React.FormEvent)=>{
+    event.preventDefault()
+    if (busy) return
+    if (registration && password!==confirmation) {setError('Las contraseñas no coinciden'); return}
+    setBusy(true); setError('')
+    try {
+      const owner=await api(registration ? '/auth/register' : '/auth/login',{method:'POST',body:JSON.stringify({username,password,remember,...(registration ? {setup_token:activation} : {})})})
+      setPassword(''); setConfirmation(''); setActivation(''); done(owner)
     } catch(err) { setError(err instanceof Error ? err.message : 'No se pudo iniciar sesión') }
     finally { setBusy(false) }
   }
   return <main className="login-page"><header className="topbar"><Brand /><span className="live-badge">ACCESO PRIVADO</span></header>
     <div className="login-layout"><div className="login-intro"><p className="eyebrow">TU ESPACIO DE ENTRENAMIENTO</p><h1>Tu esfuerzo.<br/><em>Tu progreso.</em></h1><p className="hero-description">Tus rutinas, tus series y tu historial. Inicia sesión para continuar donde lo dejaste.</p></div>
-      <section className="login-card" aria-labelledby="login-title"><p className="eyebrow">BIENVENIDO DE NUEVO</p><h2 id="login-title">Iniciar sesión</h2>
+      <section className="login-card" aria-labelledby="login-title"><p className="eyebrow">{registration ? 'TU CUENTA PERSONAL' : 'BIENVENIDO DE NUEVO'}</p><h2 id="login-title">{registration ? 'Crear mi cuenta' : 'Iniciar sesión'}</h2>
         {notice && <div className="login-notice"><p role="status">{notice}</p><button onClick={retry} disabled={busy}>Comprobar sesión</button></div>}
         <ErrorNotice message={error}/>
+        {statusError && <div className="login-notice"><p role="status">{statusError}</p><button onClick={loadStatus} disabled={busy}>Comprobar acceso</button></div>}
         <form onSubmit={submit}>
           <label className="field"><span>Usuario</span><input autoComplete="username" name="username" value={username} onChange={e=>setUsername(e.target.value)} maxLength={100} required disabled={busy}/></label>
-          <label className="field"><span>Contraseña</span><input type="password" autoComplete="current-password" name="password" value={password} onChange={e=>setPassword(e.target.value)} maxLength={128} required disabled={busy}/></label>
+          <label className="field"><span>Contraseña</span><input type="password" autoComplete={registration ? 'new-password' : 'current-password'} name="password" value={password} onChange={e=>setPassword(e.target.value)} minLength={registration ? 12 : 1} maxLength={128} required disabled={busy}/></label>
+          {registration && <>
+            <p className="muted">Elige una contraseña de al menos 12 caracteres. Esta será la única cuenta de la aplicación.</p>
+            <label className="field"><span>Confirmar contraseña</span><input type="password" autoComplete="new-password" value={confirmation} onChange={e=>setConfirmation(e.target.value)} minLength={12} maxLength={128} required disabled={busy}/></label>
+            <label className="field"><span>Código de activación</span><input type="password" autoComplete="off" value={activation} onChange={e=>setActivation(e.target.value)} minLength={20} maxLength={256} required disabled={busy}/></label>
+            <p className="muted">Usa el código privado de activación para vincular tu cuenta con tus entrenamientos.</p>
+          </>}
           <label className="checkbox-label"><input type="checkbox" checked={remember} onChange={e=>setRemember(e.target.checked)} disabled={busy}/>Mantener mi sesión iniciada</label>
           <p className="muted login-hint">Recuerda este dispositivo para entrar directamente a tu entrenamiento.</p>
-          <button className="primary" type="submit" disabled={busy}>{busy ? 'Entrando…' : 'Entrar a mi espacio ↗'}</button>
+          <button className="primary" type="submit" disabled={busy}>{busy ? (registration ? 'Creando cuenta…' : 'Entrando…') : (registration ? 'Crear cuenta y entrar ↗' : 'Entrar a mi espacio ↗')}</button>
         </form>
+        {available && <button disabled={busy} onClick={()=>{setRegistration(!registration);setPassword('');setConfirmation('');setActivation('');setError('')}}>{registration ? 'Ya tengo acceso. Iniciar sesión' : 'Crear mi cuenta'}</button>}
       </section>
     </div>
   </main>
@@ -92,7 +120,7 @@ function App() {
   },[])
   const logout=async ()=>{
     setClosing(true)
-    try { await api('/auth/logout',{method:'POST'}); setOpened(false); setOwner(null); setNotice('') }
+    try { await api('/auth/logout',{method:'POST'}); clearDrafts(); window.dispatchEvent(new Event('gym:logout')); setOpened(false); setOwner(null); setNotice('') }
     catch(err) { setNotice(err instanceof Error ? err.message : 'No se pudo cerrar la sesión') }
     finally { setClosing(false) }
   }
@@ -107,22 +135,39 @@ function App() {
 }
 
 function WorkoutApp({authVersion}:{authVersion:number}) {
-  const [active, setActive] = useState<Workout|null>(null), [routines, setRoutines] = useState<any[]>([]), [history, setHistory] = useState<Workout[]>([]), [selected, setSelected] = useState<Workout|null>(null), [view, setView] = useState<'home'|'history'|'detail'>('home'), [error, setError] = useState(''), [loadingDetail, setLoadingDetail] = useState(false)
-  const load = async () => { try { setError(''); setActive(await api('/workouts/active')); setRoutines(await api('/routines')); setHistory(await api('/workouts')) } catch (err:any) { setError(err.message) } }
+  const [active, setActive] = useState<Workout|null>(null), [routines, setRoutines] = useState<any[]>([]), [history, setHistory] = useState<Workout[]>([]), [selected, setSelected] = useState<Workout|null>(null), [view, setView] = useState<'home'|'history'|'detail'|'session'|'calendar'|'progress'>('home'), [error, setError] = useState(''), [loadingDetail, setLoadingDetail] = useState(false)
+  const [lifecycleBusy,setLifecycleBusy]=useState(false)
+  const initialLoad = useRef(true),loadVersion=useRef(0),mutating=useRef(false)
+  const load = async () => {
+    if(mutating.current)return
+    const expected=++loadVersion.current
+    try {
+      const [current,nextRoutines,nextHistory]=await Promise.all([api('/workouts/active'),api('/routines'),api('/workouts')])
+      if(expected!==loadVersion.current || mutating.current)return
+      setError('');setActive(current);setRoutines(nextRoutines);setHistory(nextHistory)
+      if(initialLoad.current){setView(current?'session':'home');initialLoad.current=false}
+    }catch(err){if(expected===loadVersion.current)setError(err instanceof Error?err.message:'No se pudo cargar la sesión')}
+  }
   useEffect(() => { load() }, [authVersion])
-  const start = async (routineId:number) => { try { setActive(await api('/workouts', { method:'POST', body:JSON.stringify({ routine_id:routineId }) })) } catch (err:any) { setError(err.message) } }
-  const finish = async () => { if (active && confirm('¿Finalizar entrenamiento?')) { await api(`/workouts/${active.id}/finish`, { method:'POST' }); setActive(null); load() } }
-  const cancelWorkout = async () => { if (active && confirm('¿Cancelar este entrenamiento? Se eliminarán todas las series registradas.')) { try { setError(''); await api(`/workouts/${active.id}`, { method:'DELETE' }); setActive(null); await load() } catch (err:any) { setError(err.message) } } }
+  useEffect(()=>{const resume=()=>{if(document.visibilityState==='visible')load()};window.addEventListener('focus',resume);window.addEventListener('pageshow',resume);document.addEventListener('visibilitychange',resume);return()=>{loadVersion.current++;window.removeEventListener('focus',resume);window.removeEventListener('pageshow',resume);document.removeEventListener('visibilitychange',resume)}},[])
+  const mutate=async(action:()=>Promise<void>)=>{
+    if(mutating.current)return
+    mutating.current=true;setLifecycleBusy(true);loadVersion.current++;setError('')
+    let failure=''
+    try{await action()}catch(err){failure=err instanceof Error?err.message:'No se pudo guardar el cambio'}
+    finally{mutating.current=false;await load();setLifecycleBusy(false);if(failure)setError(failure)}
+  }
+  const start = (routineId:number) => mutate(async()=>{setActive(await api('/workouts',{method:'POST',body:JSON.stringify({routine_id:routineId})}));setView('session')})
+  const finish = () => {if(active && confirm('¿Finalizar entrenamiento?'))mutate(async()=>{await api(`/workouts/${active.id}/finish`,{method:'POST'});clearDrafts(active.id);setActive(null);setView('history')})}
+  const cancelWorkout = () => {if(active && confirm('¿Cancelar este entrenamiento? Se eliminarán todas las series registradas.'))mutate(async()=>{await api(`/workouts/${active.id}`,{method:'DELETE'});clearDrafts(active.id);setActive(null);setView('home')})}
   const deleteWorkout = async (workout:Workout) => { if (confirm('¿Eliminar este entrenamiento del historial? Esta acción no se puede deshacer.')) { try { setError(''); await api(`/workouts/${workout.id}`, { method:'DELETE' }); setSelected(null); setView('history'); await load() } catch (err:any) { setError(err.message) } } }
   const openDetail = async (workoutId:number) => { try { setError(''); setLoadingDetail(true); setSelected(await api(`/workouts/${workoutId}`)); setView('detail') } catch (err:any) { setError(err.message) } finally { setLoadingDetail(false) } }
-  if (active) return <Session workout={active} refresh={load} finish={finish} cancelWorkout={cancelWorkout} error={error} />
-  if (view === 'detail' && selected) return <WorkoutDetail workout={selected} back={() => setView('history')} deleteWorkout={deleteWorkout} error={error} />
 
-  return <main>
-    <header className="topbar"><Brand /><nav aria-label="Navegación principal"><button className={view === 'home' ? 'nav-active' : ''} onClick={() => setView('home')}>Entrenar</button><button className={view === 'history' ? 'nav-active' : ''} onClick={() => setView('history')}>Historial</button></nav></header>
+  return <><div className={active ? 'browsing-active' : ''} hidden={view==='session'}>{view==='detail' && selected ? <WorkoutDetail workout={selected} back={()=>setView('history')} deleteWorkout={deleteWorkout} error={error}/> : <main>
+    <header className="topbar"><Brand /><nav aria-label="Navegación principal"><button className={view === 'home' ? 'nav-active' : ''} onClick={() => setView('home')}>Entrenar</button><button className={view === 'history' ? 'nav-active' : ''} onClick={() => setView('history')}>Historial</button><button className={view==='calendar'?'nav-active':''} onClick={()=>setView('calendar')}>Calendario</button><button className={view==='progress'?'nav-active':''} onClick={()=>setView('progress')}>Progreso</button></nav></header>
     <ErrorNotice message={error} />
     <div className="hero"><div><p className="eyebrow">{view === 'home' ? 'TU PRÓXIMA SESIÓN' : 'TU RECORRIDO'}</p><h1>{view === 'home' ? <>Cada serie<br /><em>cuenta.</em></> : <>Trabajo hecho.<br /><em>Fuerza ganada.</em></>}</h1><p className="hero-description">{view === 'home' ? 'Elige tu rutina. Encuentra tu ritmo. Hazla tuya.' : 'Vuelve a tus entrenamientos y encuentra tu referencia.'}</p></div><div className="hero-art" aria-hidden="true"><span>///</span><small>KEEP SHOWING UP</small></div></div>
-    {view === 'history' ? <>
+    {view==='progress'?<Progress workouts={history} open={openDetail}/>:view==='calendar'?<AttendanceCalendar workouts={history} open={openDetail}/>:view === 'history' ? <>
       <div className="section-heading"><h2>Sesiones terminadas</h2><span className="badge">{history.length} sesiones</span></div>
       {loadingDetail && <p role="status" className="muted">Abriendo sesión…</p>}
       {history.length ? <div className="history">{history.map(workout => <button className="history-card" key={workout.id} onClick={() => openDetail(workout.id)}>
@@ -130,14 +175,18 @@ function WorkoutApp({authVersion}:{authVersion:number}) {
       </button>)}</div> : <div className="empty-state"><span aria-hidden="true">↗</span><h3>Tu recorrido empieza aquí</h3><p>Al finalizar tu primer entrenamiento, podrás consultarlo en este espacio.</p><button className="primary" onClick={() => setView('home')}>Elegir rutina</button></div>}
     </> : <>
       <div className="section-heading"><h2>El entrenamiento de hoy</h2><span className="eyebrow">A TU RITMO</span></div>
-      <div className="routine-grid">{routines.map(routine => { const info= routineInfo[routine.name]; return <button className="routine" data-routine={routine.name} key={routine.id} onClick={() => start(routine.id)}>
+      <div className="routine-grid">{routines.map(routine => { const info= routineInfo[routine.name]; return <button className="routine" data-routine={routine.name} key={routine.id} disabled={!!active || lifecycleBusy} onClick={() => start(routine.id)}>
         <span className="routine-top"><span className="routine-tag">{routine.name}</span><span className="routine-number" aria-hidden="true">{info?.number || '↗'}</span></span>
         <span className="routine-title">{info?.title || routine.name}</span><span className="routine-description">{info?.subtitle || 'Una sesión para ti'}</span>
         <span className="routine-footer"><span>{routine.exercises.length ? routine.exercises.length + ' ejercicios' : 'Empieza vacío'}</span><span className="round-arrow" aria-hidden="true">↗</span></span>
       </button> })}</div>
     </>}
     <footer className="page-footer"><Brand /><span>UNA SERIE A LA VEZ.</span></footer>
-  </main>
+  </main>}</div>
+    {active && <div hidden={view!=='session'}><Session key={active.id} workout={active} lifecycleBusy={lifecycleBusy} refresh={load} finish={finish} cancelWorkout={cancelWorkout} error={error} browse={()=>setView('home')}/></div>}
+    {active && <FloatingTimer workout={active}/>}
+    {active && view!=='session' && <button className="resume-session" onClick={()=>setView('session')}>● Retomar {active.routine.name} <span>Entrenamiento en curso ↗</span></button>}
+  </>
 }
 
 
@@ -154,7 +203,7 @@ function WorkoutDetail({ workout, back, deleteWorkout, error }:{ workout:Workout
 }
 
 function RecentWorkoutReference({ workouts, routineName, error, retry }:{ workouts:Workout[]; routineName:string; error:string; retry:() => void }) {
-  return <aside className="recent-reference"><p className="eyebrow">TU PUNTO DE PARTIDA</p><h2>La última vez<em>.</em></h2><p className="muted">Tus sesiones recientes de {routineName}</p>
+  return <aside className="recent-reference"><p className="eyebrow">TU PUNTO DE PARTIDA</p><h2>La última vez<em>.</em></h2><p className="muted">Tus sesiones recientes de {routineName}. Cada carga muestra su unidad original; los registros anteriores no se convierten automáticamente.</p>
     {error ? <div><ErrorNotice message={'No se pudo cargar la referencia: '+error} /><button onClick={retry}>Reintentar</button></div> : workouts.length ? workouts.map((entry,index) => <details key={entry.id} open={index === 0}>
       <summary><span><small>{index === 0 ? 'MÁS RECIENTE' : 'SESIÓN ANTERIOR'}</small><b>{formatDate(entry.started_at)}</b></span><span className="expand-icon" aria-hidden="true">＋</span></summary><p className="reference-duration">{duration(entry)}</p>
       <div className="recent-exercises">{entry.exercises.filter(item=>!item.skipped).map(item=> { const workingSets=item.sets.filter(set=>set.set_type==='WORKING'); return <div key={item.id}><b>{item.exercise_name_snapshot}</b><span>{workingSets.length ? workingSets.map(referenceSetLabel).join(' · ') : 'Sin series de trabajo'}</span></div> })}</div>
@@ -162,46 +211,89 @@ function RecentWorkoutReference({ workouts, routineName, error, retry }:{ workou
   </aside>
 }
 
-function ExercisePicker({catalog,choose,close}:{catalog:Exercise[];choose:(id:number)=>Promise<void>;close:()=>void}) {
+type ExerciseDraft = {name:string; convention:'TOTAL'|'PER_HAND'}
+function ExercisePicker({catalog,choose,custom,close,draft,setDraft}:{catalog:Exercise[];choose:(id:number)=>Promise<void>;custom?: (name:string,convention:'TOTAL'|'PER_HAND')=>Promise<void>;close:()=>void;draft:ExerciseDraft;setDraft:(value:ExerciseDraft)=>void}) {
   const dialog=useRef<HTMLDialogElement>(null)
+  const [busy,setBusy]=useState(false),[error,setError]=useState('')
   useEffect(()=>{
     const node=dialog.current, opener=document.activeElement as HTMLElement|null
     node?.showModal()
     return ()=>{ node?.close(); opener?.focus() }
   },[])
-  return <dialog className="sheet" ref={dialog} onCancel={close} aria-labelledby="catalog-title">
-    <div className="sheet-heading"><div><p className="eyebrow">DALE TU FORMA</p><h2 id="catalog-title">Agregar o sustituir</h2></div><button onClick={close} aria-label="Cerrar catálogo">×</button></div>
+  const run=async(action:()=>Promise<void>)=>{
+    setBusy(true);setError('')
+    try { await action() }
+    catch(err) { if(err instanceof ApiError && err.status===401) close(); else setError(err instanceof Error?err.message:'No se pudo agregar el ejercicio') }
+    finally { setBusy(false) }
+  }
+  return <dialog className="sheet" ref={dialog} onCancel={event=>{if(busy)event.preventDefault();else close()}} aria-labelledby="catalog-title">
+    <div className="sheet-heading"><div><p className="eyebrow">DALE TU FORMA</p><h2 id="catalog-title">Agregar o sustituir</h2></div><button onClick={close} disabled={busy} aria-label="Cerrar catálogo">×</button></div>
     <p className="muted">Elige un ejercicio. Puedes saltar el que quieras sustituir.</p>
-    <div className="catalog-list">{catalog.map(exercise=><button key={exercise.id} onClick={()=>choose(exercise.id)}><span>{exercise.name}</span><span aria-hidden="true">＋</span></button>)}</div>
-    <button className="sheet-close" onClick={close}>Volver al entrenamiento</button>
+    <ErrorNotice message={error}/>
+    {custom && <form className="custom-exercise" onSubmit={event=>{event.preventDefault();run(()=>custom(draft.name,draft.convention))}}>
+      <h3>¿No está en la lista?</h3>
+      <label className="field"><span>Nombre del ejercicio</span><input value={draft.name} onChange={event=>setDraft({...draft,name:event.target.value})} required maxLength={100} disabled={busy}/></label>
+      <label className="field"><span>Cómo registrarás la carga</span><select aria-label="Cómo registrarás la carga" value={draft.convention} onChange={event=>setDraft({...draft,convention:event.target.value as 'TOTAL'|'PER_HAND'})} disabled={busy}><option value="TOTAL">Carga total</option><option value="PER_HAND">Por mano</option></select></label>
+      <button className="primary" disabled={busy || !draft.name.trim()}>{busy?'Agregando…':'Crear y agregar ejercicio'}</button>
+      <small>Se guardará en tu catálogo para próximas sesiones.</small>
+    </form>}
+    <div className="catalog-list">{catalog.map(exercise=><button key={exercise.id} disabled={busy} onClick={()=>run(()=>choose(exercise.id))}><span>{exercise.name}</span><span aria-hidden="true">＋</span></button>)}</div>
+    <button className="sheet-close" disabled={busy} onClick={close}>Volver al entrenamiento</button>
   </dialog>
 }
 
-function Session({ workout, refresh, finish, cancelWorkout, error }:{ workout:Workout; refresh:() => Promise<void>; finish:() => void; cancelWorkout:() => void; error:string }) {
-  const [weights, setWeights] = useState<Record<number,string>>({}), [weightTypes, setWeightTypes] = useState<Record<number,WeightType>>({}), [reps, setReps] = useState(''), [warm, setWarm] = useState(false), [adding, setAdding] = useState(false), [catalog, setCatalog] = useState<Exercise[]>([]), [recent, setRecent] = useState<Workout[]>([]), [referenceError, setReferenceError] = useState(''), [restUntil, setRestUntil] = useState<number|null>(null), [now, setNow] = useState(Date.now())
-const loadReference = () => { setReferenceError(''); Promise.all([api(`/routines/${workout.routine_id}/recent-workouts?limit=2`), api('/exercises')]).then(([recentWorkouts, exercises]) => { setRecent(recentWorkouts); setCatalog(exercises); const previous = recentWorkouts[0], nextWeights:Record<number,string> = {}, nextTypes:Record<number,WeightType> = {}; workout.exercises.forEach(item => { const previousExercise = previous?.exercises.find((exercise:WorkoutExercise) => exercise.exercise_id === item.exercise_id); const suggestion = previousExercise?.sets.slice().reverse().find((set:WorkoutSet) => set.set_type === 'WORKING'); if (suggestion) { if (suggestion.load_value != null) nextWeights[item.id] = String(suggestion.load_value); nextTypes[item.id] = suggestion.weight_type } }); setWeights(current => ({ ...nextWeights, ...current })); setWeightTypes(current => ({ ...nextTypes, ...current })) }).catch((err:any) => setReferenceError(err.message)) }
+function Session({ workout, refresh, finish, cancelWorkout, error, browse, lifecycleBusy }:{ workout:Workout; refresh:() => Promise<void>; finish:() => void; cancelWorkout:() => void; error:string; browse:()=>void; lifecycleBusy:boolean }) {
+  const [draft]=useState(()=>readDraft(workout.id))
+  const [weights, setWeights] = useState<Record<number,string>>(draft.weights||{}), [weightTypes, setWeightTypes] = useState<Record<number,WeightType>>(draft.weightTypes||{}), [reps, setReps] = useState<Record<number,string>>(draft.repsById || (draft.reps && workout.exercises[0]?{[workout.exercises[0].id]:draft.reps}:{})), [warm, setWarm] = useState<Record<number,boolean>>(draft.warmsById || (draft.warm && workout.exercises[0]?{[workout.exercises[0].id]:true}:{})), [adding, setAdding] = useState(false), [catalog, setCatalog] = useState<Exercise[]>([]), [recent, setRecent] = useState<Workout[]>([]), [referenceError, setReferenceError] = useState('')
+  const now=useWallClock()
+const loadReference = () => { setReferenceError(''); Promise.all([api(`/routines/${workout.routine_id}/recent-workouts?limit=2`), api('/exercises')]).then(([recentWorkouts, exercises]) => { setRecent(recentWorkouts); setCatalog(exercises); const previous = recentWorkouts[0], nextWeights:Record<number,string> = {}, nextTypes:Record<number,WeightType> = {}; workout.exercises.forEach(item => { const previousExercise = previous?.exercises.find((exercise:WorkoutExercise) => exercise.exercise_id === item.exercise_id); const suggestion = previousExercise?.sets.slice().reverse().find((set:WorkoutSet) => set.set_type === 'WORKING' && set.load_unit === 'lb'); if (suggestion) { if (suggestion.load_value != null) nextWeights[item.id] = String(suggestion.load_value); nextTypes[item.id] = suggestion.weight_type } }); setWeights(current => ({ ...nextWeights, ...current })); setWeightTypes(current => ({ ...nextTypes, ...current })) }).catch((err:any) => setReferenceError(err.message)) }
   useEffect(() => { loadReference() }, [workout.id])
-  useEffect(() => { if (!restUntil) return; const timer = window.setInterval(() => setNow(Date.now()), 1000); return () => window.clearInterval(timer) }, [restUntil])
+  const [customDraft,setCustomDraft]=useState<ExerciseDraft>(draft.customDraft||{name:'',convention:'TOTAL'})
+  useEffect(()=>{saveDraft(workout.id,{weights,weightTypes,repsById:reps,warmsById:warm,customDraft})},[workout.id,weights,weightTypes,reps,warm,customDraft])
   const reference = (item:WorkoutExercise) => { const found = recent[0]?.exercises.find(exercise => exercise.exercise_id === item.exercise_id); return found?.sets.slice().reverse().find(set => set.set_type === 'WORKING') }
   const exercise = (item:WorkoutExercise) => catalog.find(entry => entry.id === item.exercise_id)
-  const convention = (item:WorkoutExercise) => exercise(item)?.load_convention === 'PER_HAND' ? 'kg por mano' : 'kg totales'
+  const convention = (item:WorkoutExercise) => exercise(item)?.load_convention === 'PER_HAND' ? 'lb por mano' : 'lb totales'
   const typeFor = (item:WorkoutExercise):WeightType => weightTypes[item.id] || 'EXTERNAL'
-  const add = async (item:WorkoutExercise) => { try { const type = typeFor(item); await api(`/workout-exercises/${item.id}/sets`, { method:'POST', body:JSON.stringify({ reps:Number(reps), load_value:type === 'BODYWEIGHT' ? null : weights[item.id] ? Number(weights[item.id]) : null, weight_type:type, set_type:warm ? 'WARMUP' : 'WORKING' }) }); if (!warm) setRestUntil(Date.now() + 180000); setReps(''); setWarm(false); await refresh() } catch (err:any) { alert(err.message) } }
-  const editSet = async (set:WorkoutSet) => { const nextReps = prompt('Repeticiones', String(set.reps)); if (!nextReps) return; const nextLoad = set.load_value == null ? null : prompt('Peso (kg)', String(set.load_value)); await api(`/sets/${set.id}`, { method:'PATCH', body:JSON.stringify({ reps:Number(nextReps), load_value:nextLoad === null ? null : Number(nextLoad) }) }); refresh() }
-  const deleteSet = async (set:WorkoutSet) => { if (confirm('¿Eliminar esta serie?')) { await api(`/sets/${set.id}`, { method:'DELETE' }); refresh() } }
-  const move = async (item:WorkoutExercise, direction:number) => { await api(`/workout-exercises/${item.id}`, { method:'PATCH', body:JSON.stringify({ position:Math.max(1, item.position + direction) }) }); refresh() }
-  const toggle = async (item:WorkoutExercise) => { await api(`/workout-exercises/${item.id}`, { method:'PATCH', body:JSON.stringify({ skipped:!item.skipped }) }); refresh() }
+  const inFlight=useRef(false),[busy,setBusy]=useState(false),[actionError,setActionError]=useState(''),[editing,setEditing]=useState<EditDraft|null>(null),[editVisible,setEditVisible]=useState(false)
+  const locked=busy||lifecycleBusy
+  const run=async(action:()=>Promise<void>)=>{
+    if(inFlight.current||lifecycleBusy)return
+    inFlight.current=true;setBusy(true);setActionError('')
+    try{await action()}catch(err){setActionError(err instanceof Error?err.message:'No se pudo guardar el cambio')}
+    finally{inFlight.current=false;setBusy(false)}
+  }
+  const add=(item:WorkoutExercise)=>run(async()=>{
+    const count=Number(reps[item.id]),load=weights[item.id]?.trim().replace(',','.'),type=typeFor(item)
+    if(!Number.isInteger(count)||count<1||count>999)throw new Error('Escribe entre 1 y 999 repeticiones.')
+    if(type!=='BODYWEIGHT' && load && (!Number.isFinite(Number(load))||Number(load)<0))throw new Error('La carga debe ser un número válido, igual o mayor que cero.')
+    await api(`/workout-exercises/${item.id}/sets`,{method:'POST',body:JSON.stringify({reps:count,load_value:type==='BODYWEIGHT'||!load?null:Number(load),load_unit:'lb',weight_type:type,set_type:warm[item.id]?'WARMUP':'WORKING'})})
+    setReps(current=>({...current,[item.id]:''}));setWarm(current=>({...current,[item.id]:false}));await refresh()
+  })
+  const editSet=(record:WorkoutSet)=>{setEditing({record,reps:String(record.reps),load:record.load_value===null?'':String(record.load_value)});setEditVisible(true)}
+  const saveSet=async(changes:{reps:number;load_value:number|null})=>{if(!editing)return;await api(`/sets/${editing.record.id}`,{method:'PATCH',body:JSON.stringify(changes)});await refresh()}
+  const deleteSet=(set:WorkoutSet)=>{if(confirm('¿Eliminar esta serie?'))run(async()=>{await api(`/sets/${set.id}`,{method:'DELETE'});await refresh()})}
+  const move=(item:WorkoutExercise,direction:number)=>run(async()=>{await api(`/workout-exercises/${item.id}`,{method:'PATCH',body:JSON.stringify({position:Math.max(1,item.position+direction)})});await refresh()})
+  const toggle=(item:WorkoutExercise)=>run(async()=>{await api(`/workout-exercises/${item.id}`,{method:'PATCH',body:JSON.stringify({skipped:!item.skipped})});await refresh()})
   const addExercise = async (exerciseId:number) => { await api(`/workouts/${workout.id}/exercises`, { method:'POST', body:JSON.stringify({ exercise_id:exerciseId }) }); setAdding(false); refresh() }
-  const seconds = restUntil ? Math.max(0, Math.ceil((restUntil - now) / 1000)) : 0
+  const addCustomExercise=async(name:string,convention:'TOTAL'|'PER_HAND')=>{
+    const item=await api(`/workouts/${workout.id}/exercises`,{method:'POST',body:JSON.stringify({name,load_convention:convention})})
+    setCatalog(current=>current.some(entry=>entry.id===item.exercise_id)?current:[...current,{id:item.exercise_id,name:item.exercise_name_snapshot,load_convention:convention}])
+    setCustomDraft({name:'',convention:'TOTAL'});setAdding(false);await refresh()
+  }
+  const seconds = workout.rest_until ? Math.max(0, Math.ceil((timestamp(workout.rest_until) - now) / 1000)) : 0
+  const elapsed = Math.max(0,Math.floor((now-timestamp(workout.started_at))/1000))
+  const skipRest = ()=>run(async()=>{await api(`/workouts/${workout.id}/rest/skip`,{method:'POST'});await refresh()})
 
   return <main className="workout-page">
-    <header className="topbar"><Brand /><span className="live-badge"><i /> SESIÓN EN CURSO</span></header>
-    <div className="session-title"><div><p className="eyebrow">HOY TOCA</p><h1>{routineInfo[workout.routine.name]?.title || workout.routine.name}<em>.</em></h1><div className="session-metrics"><span>{workout.exercises.length} ejercicios</span><span>{workout.exercises.reduce((total,item)=>total+item.sets.length,0)} series registradas</span></div></div><div className="header-actions"><button onClick={finish} className="primary">Finalizar sesión ↗</button><button onClick={cancelWorkout} className="cancel-workout">Cancelar entrenamiento</button></div></div>
-    <ErrorNotice message={error} />
-    {seconds > 0 && <div className="rest-timer" role="timer" aria-label="Tiempo de descanso restante"><div><p className="eyebrow">RECUPERA EL AIRE</p><b>Tu siguiente serie te espera.</b></div><span className="rest-clock">{Math.floor(seconds/60)}:{String(seconds%60).padStart(2,'0')}</span><button onClick={()=>setRestUntil(null)}>Omitir descanso</button><div className="rest-track" aria-hidden="true"><span style={{width:(seconds/180*100)+'%'}} /></div></div>}
+    <header className="topbar"><Brand /><div className="session-navigation"><span className="live-badge"><i /> SESIÓN EN CURSO</span><button onClick={browse}>Explorar app</button></div></header>
+    <div className="session-title"><div><p className="eyebrow">HOY TOCA</p><h1>{routineInfo[workout.routine.name]?.title || workout.routine.name}<em>.</em></h1><div className="session-metrics"><span role="timer" aria-label="Tiempo de sesión">{clock(elapsed)}</span><span>{workout.exercises.length} ejercicios</span><span>{workout.exercises.reduce((total,item)=>total+item.sets.length,0)} series registradas</span></div></div><div className="header-actions"><button disabled={locked} onClick={finish} className="primary">Finalizar sesión ↗</button><button disabled={locked} onClick={cancelWorkout} className="cancel-workout">Cancelar entrenamiento</button></div></div>
+    <ErrorNotice message={error || actionError} />
+    {editing && !editVisible && <button onClick={()=>setEditVisible(true)}>Continuar edición de serie</button>}
+    {busy && <p role="status" className="muted">Guardando cambio…</p>}
+    {seconds > 0 && <div className="rest-timer" role="timer" aria-label="Tiempo de descanso restante"><div><p className="eyebrow">RECUPERA EL AIRE</p><b>Tu siguiente serie te espera.</b></div><span className="rest-clock">{Math.floor(seconds/60)}:{String(seconds%60).padStart(2,'0')}</span><button disabled={locked} onClick={skipRest}>Omitir descanso</button><div className="rest-track" aria-hidden="true"><span style={{width:(seconds/165*100)+'%'}} /></div></div>}
     <div className="workout-layout"><div className="workout-content">
       <div className="section-heading"><h2>Tu entrenamiento</h2><span className="eyebrow">{workout.routine.name}</span></div>
-      <div className="session">{workout.exercises.map(item=> { const ref=reference(item), type=typeFor(item); return <section className={'exercise-card '+(item.skipped ? 'skip' : '')} key={item.id}>
+      <div className="session">{workout.exercises.map(item=> { const ref=reference(item), type=typeFor(item); return <section className={'exercise-card '+(item.skipped ? 'skip' : '')} key={item.id}><fieldset className="exercise-fields" disabled={locked}>
         <div className="exercise-heading"><span className="exercise-number">{String(item.position).padStart(2,'0')}</span><h2>{item.exercise_name_snapshot}</h2></div>
         <div className="exercise-toolbar"><span className="badge">{item.skipped ? 'Omitido' : item.sets.length+' series'}</span><div className="exercise-actions"><button aria-label={'Mover arriba: '+item.exercise_name_snapshot} onClick={()=>move(item,-1)} disabled={item.position===1}>↑</button><button aria-label={'Mover abajo: '+item.exercise_name_snapshot} onClick={()=>move(item,1)} disabled={item.position===workout.exercises.length}>↓</button><button onClick={()=>toggle(item)}>{item.skipped ? 'Reanudar' : 'Saltar'}</button></div></div>
         {!item.skipped && <>
@@ -210,14 +302,15 @@ const loadReference = () => { setReferenceError(''); Promise.all([api(`/routines
           <div className="quick">
             <label className="field weight-type"><span>Tipo de carga</span><select value={type} onChange={event=>setWeightTypes({...weightTypes,[item.id]:event.target.value as WeightType})}>{(['EXTERNAL','BODYWEIGHT','BODYWEIGHT_PLUS','BODYWEIGHT_ASSISTED'] as WeightType[]).map(option=><option key={option} value={option}>{weightLabel(option)}</option>)}</select><small>{weightLabel(type)}</small></label>
             {type!=='BODYWEIGHT' && <label className="field"><span>Peso <small>({convention(item)})</small></span><input aria-label={'Peso: '+item.exercise_name_snapshot} inputMode="decimal" placeholder="0" value={weights[item.id] || ''} onChange={event=>setWeights({...weights,[item.id]:event.target.value})} /></label>}
-            <label className="field"><span>Repeticiones</span><input aria-label={'Repeticiones: '+item.exercise_name_snapshot} inputMode="numeric" placeholder="0" value={reps} onChange={event=>setReps(event.target.value)} /></label>
+            <label className="field"><span>Repeticiones</span><input aria-label={'Repeticiones: '+item.exercise_name_snapshot} inputMode="numeric" placeholder="0" value={reps[item.id]||''} onChange={event=>setReps({...reps,[item.id]:event.target.value})} /></label>
           </div>
-          <div className="record-row"><label className="checkbox-label"><input type="checkbox" checked={warm} onChange={event=>setWarm(event.target.checked)} />Calentamiento</label><button className="record" disabled={!reps} onClick={()=>add(item)}>＋ Registrar serie</button></div>
+          <div className="record-row"><label className="checkbox-label"><input type="checkbox" checked={warm[item.id]||false} onChange={event=>setWarm({...warm,[item.id]:event.target.checked})} />Calentamiento</label><button className="record" disabled={locked || !reps[item.id]} onClick={()=>add(item)}>＋ Registrar serie</button></div>
         </>}
-      </section> })}</div>
-      <button className="add" onClick={()=>setAdding(true)} aria-haspopup="dialog">＋ Agregar o sustituir ejercicio</button>
+      </fieldset></section> })}</div>
+      <button disabled={locked} className="add" onClick={()=>setAdding(true)} aria-haspopup="dialog">＋ Agregar o sustituir ejercicio</button>
     </div><RecentWorkoutReference workouts={recent} routineName={workout.routine.name} error={referenceError} retry={loadReference} /></div>
-    {adding && <ExercisePicker catalog={catalog} choose={addExercise} close={()=>setAdding(false)} />}
+    {editing && editVisible && <SetEditor draft={editing} change={setEditing} save={saveSet} close={()=>{setEditing(null);setEditVisible(false)}} suspend={()=>setEditVisible(false)}/>}
+    {adding && <ExercisePicker catalog={catalog} choose={addExercise} custom={workout.routine.name==='FREE'?addCustomExercise:undefined} draft={customDraft} setDraft={setCustomDraft} close={()=>setAdding(false)} />}
   </main>
 }
 

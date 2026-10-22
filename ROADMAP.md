@@ -2,9 +2,11 @@
 
 Ideas detectadas durante el uso real. Cada feature se definirá y entregará en su propia rama y pull request.
 
+Las PR #12–#20 ya se integraron en sus ramas de dependencia, pero aún no en `main`. Se agrupan en una [entrega de integración a main](docs/integration-main.md); hacer merge a una rama de feature no equivale a publicar en producción.
+
 ## Navegación durante una sesión activa
 
-- Estado: pendiente.
+- Estado: implementada en PR #13; pendiente de integración a main.
 - Problema: una sesión iniciada ocupa toda la aplicación e impide volver a Inicio, Historial y detalles.
 - Permitir explorar las pantallas mientras la sesión continúa activa.
 - Mostrar una acción persistente y visible para retomar el entrenamiento en curso.
@@ -14,22 +16,22 @@ Ideas detectadas durante el uso real. Cada feature se definirá y entregará en 
 
 ## Ejercicio nuevo por texto libre
 
-- Estado: pendiente.
+- Estado: implementada en PR #14; pendiente de integración a main.
 - En una sesión FREE, permitir escribir un ejercicio que no existe en la lista desde el selector de agregar o sustituir.
 - Definir si se conserva en el catálogo para siguientes sesiones, cómo evitar duplicados y qué convención de carga usa.
 - Mantener su nombre como snapshot histórico de la sesión.
 
 ## Tiempo de sesión y descanso de 2:45
 
-- Estado: pendiente.
+- Estado: implementado en PR #15; pendiente de integración a main.
 - Mostrar el tiempo transcurrido de la sesión en vivo.
 - Mostrar el descanso y reiniciarlo a 2 minutos y 45 segundos al registrar una nueva serie.
-- El descanso actual es de 3 minutos para series de trabajo; esta feature debe cambiar esa duración.
-- Alinear si los calentamientos también reinician el descanso antes de implementarlo.
+- Sustituye el descanso anterior de 3 minutos por 2:45 persistente en el servidor.
+- Cada serie nueva, incluidos calentamientos, reinicia el descanso según el requisito de cada registro. Editar una serie no lo reinicia.
 
 ## Continuidad al cambiar de aplicación y temporizador superpuesto
 
-- Estado: pendiente de exploración técnica.
+- Estado: continuidad y ventana flotante opcional implementadas en PR #16; pendiente de integración a main. Superposición externa móvil no disponible universalmente.
 - Poder salir del navegador o PWA del celular, usar otras aplicaciones y retomar el entrenamiento conservando su estado.
 - Recalcular los tiempos usando marcas de tiempo al volver, para reflejar el tiempo realmente transcurrido.
 - Evaluar la posibilidad de mantener visible un temporizador superpuesto fuera de la aplicación.
@@ -37,7 +39,7 @@ Ideas detectadas durante el uso real. Cada feature se definirá y entregará en 
 
 ## Gráficas y exploración del progreso
 
-- Estado: pendiente de definición.
+- Estado: gráficas con filtros y métricas conservadoras implementadas en PR #18; pendiente de integración a main.
 - Visualizaciones del entrenamiento a lo largo del tiempo.
 - Consultas por ejercicio, sesión y periodos de tiempo.
 - Alinear las métricas concretas y cómo comparar cargas totales, por mano, asistidas y de peso corporal.
@@ -46,18 +48,26 @@ Ideas detectadas durante el uso real. Cada feature se definirá y entregará en 
 ## Pulido visual posterior
 
 - Estado: pendiente de más detalles del usuario.
+- Se entrega aparte pulido funcional de formularios, errores y protección contra envíos repetidos; no sustituye la futura alineación estética.
+- Pulido funcional: PR #19, pendiente de integración a main.
 - Conservar la dirección Performance con verde lima como base.
 - Recopilar observaciones del uso real y ajustar el diseño según esos casos.
 
 ## Calendario de asistencia
 
-- Estado: pendiente.
+- Estado: implementado en PR #17; pendiente de integración a main.
 - Calendario visual de los días con entrenamientos finalizados y acceso a sus sesiones.
 - Detalle y criterios: [Calendario de asistencia](features/workout-attendance-calendar.md).
 
 ## Cargas en libras
 
-- Estado: pendiente de alinear el historial e implementar.
+- Estado: implementada en PR #12; pendiente de integración a main. La reinterpretación del historial anterior sigue pendiente de confirmación.
 - Usar lb por defecto, conforme al gimnasio del propietario.
 - Confirmar el significado de las cargas anteriores antes de convertirlas o cambiar sus etiquetas.
 - Detalle y criterios: [Cargas en libras](features/pounds-load-units.md).
+
+## Registro de la cuenta propietaria
+
+- Estado: implementado en PR #20; pendiente de integración a main.
+- Permite crear una sola cuenta con un código privado de activación, conserva el historial y cierra el registro después de crearla.
+- Detalle y activación: [Registro propietario](features/owner-registration.md).
