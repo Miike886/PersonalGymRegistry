@@ -22,4 +22,5 @@
 
 ## Entrega
 
-- Rama feature/workout-attendance-calendar, base feature/background-session-continuity; PR pendiente.
+- Rama feature/workout-attendance-calendar, base feature/background-session-continuity; PR #17, abierta.
+- Quality gate: sin hallazgos bloqueantes tras revisar contrato, fechas locales, exclusión de activas, botones accesibles y navegación conservando borradores. Pruebas locales pasan; CI se verifica antes de entrega global.
