@@ -40,6 +40,7 @@ class Workout(Base):
     routine_id: Mapped[int] = mapped_column(ForeignKey("routines.id"), index=True)
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+    rest_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     routine: Mapped[Routine] = relationship()
     exercises: Mapped[list["WorkoutExercise"]] = relationship(back_populates="workout", cascade="all, delete-orphan", order_by="WorkoutExercise.position")
