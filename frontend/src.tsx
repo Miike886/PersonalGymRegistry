@@ -111,13 +111,28 @@ function App() {
 
 function WorkoutApp({authVersion}:{authVersion:number}) {
   const [active, setActive] = useState<Workout|null>(null), [routines, setRoutines] = useState<any[]>([]), [history, setHistory] = useState<Workout[]>([]), [selected, setSelected] = useState<Workout|null>(null), [view, setView] = useState<'home'|'history'|'detail'|'session'>('home'), [error, setError] = useState(''), [loadingDetail, setLoadingDetail] = useState(false)
-  const initialLoad = useRef(true)
-  const load = async () => { try { setError(''); const current=await api('/workouts/active'); setActive(current); if(initialLoad.current) { setView(current ? 'session' : 'home'); initialLoad.current=false } setRoutines(await api('/routines')); setHistory(await api('/workouts')) } catch (err:any) { setError(err.message) } }
+  const initialLoad = useRef(true),loadVersion=useRef(0),mutating=useRef(false)
+  const load = async () => {
+    if(mutating.current)return
+    const expected=++loadVersion.current
+    try {
+      const [current,nextRoutines,nextHistory]=await Promise.all([api('/workouts/active'),api('/routines'),api('/workouts')])
+      if(expected!==loadVersion.current || mutating.current)return
+      setError('');setActive(current);setRoutines(nextRoutines);setHistory(nextHistory)
+      if(initialLoad.current){setView(current?'session':'home');initialLoad.current=false}
+    }catch(err){if(expected===loadVersion.current)setError(err instanceof Error?err.message:'No se pudo cargar la sesión')}
+  }
   useEffect(() => { load() }, [authVersion])
-  useEffect(()=>{const resume=()=>{if(document.visibilityState==='visible')load()};window.addEventListener('focus',resume);window.addEventListener('pageshow',resume);document.addEventListener('visibilitychange',resume);return()=>{window.removeEventListener('focus',resume);window.removeEventListener('pageshow',resume);document.removeEventListener('visibilitychange',resume)}},[])
-  const start = async (routineId:number) => { try { setActive(await api('/workouts', { method:'POST', body:JSON.stringify({ routine_id:routineId }) })); setView('session') } catch (err:any) { setError(err.message) } }
-  const finish = async () => { if (active && confirm('¿Finalizar entrenamiento?')) { await api(`/workouts/${active.id}/finish`, { method:'POST' }); clearDrafts(active.id); setActive(null); setView('history'); load() } }
-  const cancelWorkout = async () => { if (active && confirm('¿Cancelar este entrenamiento? Se eliminarán todas las series registradas.')) { try { setError(''); await api(`/workouts/${active.id}`, { method:'DELETE' }); clearDrafts(active.id); setActive(null); setView('home'); await load() } catch (err:any) { setError(err.message) } } }
+  useEffect(()=>{const resume=()=>{if(document.visibilityState==='visible')load()};window.addEventListener('focus',resume);window.addEventListener('pageshow',resume);document.addEventListener('visibilitychange',resume);return()=>{loadVersion.current++;window.removeEventListener('focus',resume);window.removeEventListener('pageshow',resume);document.removeEventListener('visibilitychange',resume)}},[])
+  const mutate=async(action:()=>Promise<void>)=>{
+    if(mutating.current)return
+    mutating.current=true;loadVersion.current++;setError('')
+    try{await action()}catch(err){setError(err instanceof Error?err.message:'No se pudo guardar el cambio')}
+    finally{mutating.current=false;await load()}
+  }
+  const start = (routineId:number) => mutate(async()=>{setActive(await api('/workouts',{method:'POST',body:JSON.stringify({routine_id:routineId})}));setView('session')})
+  const finish = () => {if(active && confirm('¿Finalizar entrenamiento?'))mutate(async()=>{await api(`/workouts/${active.id}/finish`,{method:'POST'});clearDrafts(active.id);setActive(null);setView('history')})}
+  const cancelWorkout = () => {if(active && confirm('¿Cancelar este entrenamiento? Se eliminarán todas las series registradas.'))mutate(async()=>{await api(`/workouts/${active.id}`,{method:'DELETE'});clearDrafts(active.id);setActive(null);setView('home')})}
   const deleteWorkout = async (workout:Workout) => { if (confirm('¿Eliminar este entrenamiento del historial? Esta acción no se puede deshacer.')) { try { setError(''); await api(`/workouts/${workout.id}`, { method:'DELETE' }); setSelected(null); setView('history'); await load() } catch (err:any) { setError(err.message) } } }
   const openDetail = async (workoutId:number) => { try { setError(''); setLoadingDetail(true); setSelected(await api(`/workouts/${workoutId}`)); setView('detail') } catch (err:any) { setError(err.message) } finally { setLoadingDetail(false) } }
 

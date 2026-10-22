@@ -29,7 +29,7 @@ Ideas detectadas durante el uso real. Cada feature se definirá y entregará en 
 
 ## Continuidad al cambiar de aplicación y temporizador superpuesto
 
-- Estado: continuidad y ventana flotante opcional implementadas en PR apilada; pendiente de aprobación. Superposición externa móvil no disponible universalmente.
+- Estado: continuidad y ventana flotante opcional implementadas en PR #16; pendiente de aprobación. Superposición externa móvil no disponible universalmente.
 - Poder salir del navegador o PWA del celular, usar otras aplicaciones y retomar el entrenamiento conservando su estado.
 - Recalcular los tiempos usando marcas de tiempo al volver, para reflejar el tiempo realmente transcurrido.
 - Evaluar la posibilidad de mantener visible un temporizador superpuesto fuera de la aplicación.
