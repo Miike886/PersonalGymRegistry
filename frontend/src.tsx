@@ -2,15 +2,27 @@ import React, { useEffect, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import './style.css'
 
-const API = import.meta.env.VITE_API_URL || 'http://localhost:8000'
-const API_TOKEN = import.meta.env.VITE_API_TOKEN
+const API = '/api'
 type WeightType = 'EXTERNAL'|'BODYWEIGHT'|'BODYWEIGHT_PLUS'|'BODYWEIGHT_ASSISTED'
 type WorkoutSet = { id:number; position:number; reps:number; load_value:number|null; weight_type:WeightType; set_type:string }
 type WorkoutExercise = { id:number; exercise_id:number|null; exercise_name_snapshot:string; position:number; skipped:boolean; sets:WorkoutSet[] }
 type Workout = { id:number; routine_id:number; started_at:string; ended_at:string|null; notes:string|null; routine:{name:string}; exercises:WorkoutExercise[] }
 type Exercise = { id:number; name:string; load_convention:'TOTAL'|'PER_HAND' }
 
-async function api(path:string, options:RequestInit = {}) { const response = await fetch(API + path, { headers:{ 'Content-Type':'application/json', ...(API_TOKEN ? {'X-App-Token':API_TOKEN} : {}) }, ...options }); if (!response.ok) throw Error((await response.json().catch(() => ({ detail:'Error de conexión' }))).detail); return response.status === 204 ? null : response.json() }
+class ApiError extends Error {
+  constructor(public status:number, message:string) { super(message) }
+}
+async function api(path:string, options:RequestInit = {}) {
+  const headers = new Headers(options.headers)
+  if (options.body) headers.set('Content-Type','application/json')
+  const response = await fetch(API + path, { ...options, headers, credentials:'same-origin', cache:'no-store' })
+  if (!response.ok) {
+    if (response.status === 401 && !path.startsWith('/auth/')) window.dispatchEvent(new Event('gym:unauthorized'))
+    const body = await response.json().catch(() => ({}))
+    throw new ApiError(response.status, typeof body.detail === 'string' ? body.detail : 'No se pudo completar la solicitud')
+  }
+  return response.status === 204 ? null : response.json()
+}
 function formatDate(date:string) { return new Intl.DateTimeFormat('es-MX', { weekday:'long', day:'numeric', month:'long', year:'numeric' }).format(new Date(date)) }
 function duration(workout:Workout) { if (!workout.ended_at) return ''; const minutes = Math.max(0, Math.round((new Date(workout.ended_at).getTime() - new Date(workout.started_at).getTime()) / 60000)); return minutes >= 60 ? [`${Math.floor(minutes / 60)} h`, minutes % 60 ? `${minutes % 60} min` : ''].filter(Boolean).join(' ') : `${minutes} min` }
 function weightLabel(type:WeightType) { return ({ EXTERNAL:'Carga externa', BODYWEIGHT:'Peso corporal', BODYWEIGHT_PLUS:'Peso corporal + carga', BODYWEIGHT_ASSISTED:'Peso corporal asistido' })[type] }
@@ -36,10 +48,68 @@ function WorkoutRows({ item }:{item:WorkoutExercise}) {
   </div>)}</div>
 }
 
+function Login({done, notice, retry}:{done:(owner:{username:string})=>void;notice:string;retry:()=>void}) {
+  const [username,setUsername]=useState(''), [password,setPassword]=useState(''), [remember,setRemember]=useState(true), [busy,setBusy]=useState(false), [error,setError]=useState('')
+  const submit=async (event:React.FormEvent)=>{
+    event.preventDefault(); setBusy(true); setError('')
+    try {
+      const owner=await api('/auth/login',{method:'POST',body:JSON.stringify({username,password,remember})})
+      setPassword(''); done(owner)
+    } catch(err) { setError(err instanceof Error ? err.message : 'No se pudo iniciar sesión') }
+    finally { setBusy(false) }
+  }
+  return <main className="login-page"><header className="topbar"><Brand /><span className="live-badge">ACCESO PRIVADO</span></header>
+    <div className="login-layout"><div className="login-intro"><p className="eyebrow">TU ESPACIO DE ENTRENAMIENTO</p><h1>Tu esfuerzo.<br/><em>Tu progreso.</em></h1><p className="hero-description">Tus rutinas, tus series y tu historial. Inicia sesión para continuar donde lo dejaste.</p></div>
+      <section className="login-card" aria-labelledby="login-title"><p className="eyebrow">BIENVENIDO DE NUEVO</p><h2 id="login-title">Iniciar sesión</h2>
+        {notice && <div className="login-notice"><p role="status">{notice}</p><button onClick={retry} disabled={busy}>Comprobar sesión</button></div>}
+        <ErrorNotice message={error}/>
+        <form onSubmit={submit}>
+          <label className="field"><span>Usuario</span><input autoComplete="username" name="username" value={username} onChange={e=>setUsername(e.target.value)} maxLength={100} required disabled={busy}/></label>
+          <label className="field"><span>Contraseña</span><input type="password" autoComplete="current-password" name="password" value={password} onChange={e=>setPassword(e.target.value)} maxLength={128} required disabled={busy}/></label>
+          <label className="checkbox-label"><input type="checkbox" checked={remember} onChange={e=>setRemember(e.target.checked)} disabled={busy}/>Mantener mi sesión iniciada</label>
+          <p className="muted login-hint">Recuerda este dispositivo para entrar directamente a tu entrenamiento.</p>
+          <button className="primary" type="submit" disabled={busy}>{busy ? 'Entrando…' : 'Entrar a mi espacio ↗'}</button>
+        </form>
+      </section>
+    </div>
+  </main>
+}
+
 function App() {
+  const [owner,setOwner]=useState<{username:string}|null>(null), [checking,setChecking]=useState(true), [opened,setOpened]=useState(false), [notice,setNotice]=useState(''), [version,setVersion]=useState(0), [closing,setClosing]=useState(false)
+  const authenticated=(next:{username:string})=>{ setOwner(next); setOpened(true); setNotice(''); setVersion(v=>v+1) }
+  const check=async ()=>{
+    setChecking(true)
+    try { authenticated(await api('/auth/session')) }
+    catch(err) { setOwner(null); setNotice(err instanceof ApiError && err.status===401 ? '' : 'No se pudo comprobar tu sesión. Revisa la conexión e inténtalo de nuevo.') }
+    finally { setChecking(false) }
+  }
+  useEffect(()=>{
+    check()
+    const expired=()=>{ setOwner(null); setNotice('Tu sesión venció. Vuelve a entrar; los datos que estabas escribiendo se conservan en esta pantalla.') }
+    window.addEventListener('gym:unauthorized',expired)
+    return ()=>window.removeEventListener('gym:unauthorized',expired)
+  },[])
+  const logout=async ()=>{
+    setClosing(true)
+    try { await api('/auth/logout',{method:'POST'}); setOpened(false); setOwner(null); setNotice('') }
+    catch(err) { setNotice(err instanceof Error ? err.message : 'No se pudo cerrar la sesión') }
+    finally { setClosing(false) }
+  }
+  return <>
+    {checking ? <main className="auth-check"><Brand/><p role="status">Comprobando tu sesión…</p></main> : !owner && <Login done={authenticated} notice={notice} retry={check}/>}
+    {opened && <div hidden={!owner || checking}>
+      <div className="account-bar"><span>{owner?.username}</span><button onClick={logout} disabled={closing}>{closing ? 'Cerrando…' : 'Cerrar sesión'}</button></div>
+      {owner && notice && <main><ErrorNotice message={notice}/></main>}
+      <WorkoutApp authVersion={version}/>
+    </div>}
+  </>
+}
+
+function WorkoutApp({authVersion}:{authVersion:number}) {
   const [active, setActive] = useState<Workout|null>(null), [routines, setRoutines] = useState<any[]>([]), [history, setHistory] = useState<Workout[]>([]), [selected, setSelected] = useState<Workout|null>(null), [view, setView] = useState<'home'|'history'|'detail'>('home'), [error, setError] = useState(''), [loadingDetail, setLoadingDetail] = useState(false)
   const load = async () => { try { setError(''); setActive(await api('/workouts/active')); setRoutines(await api('/routines')); setHistory(await api('/workouts')) } catch (err:any) { setError(err.message) } }
-  useEffect(() => { load() }, [])
+  useEffect(() => { load() }, [authVersion])
   const start = async (routineId:number) => { try { setActive(await api('/workouts', { method:'POST', body:JSON.stringify({ routine_id:routineId }) })) } catch (err:any) { setError(err.message) } }
   const finish = async () => { if (active && confirm('¿Finalizar entrenamiento?')) { await api(`/workouts/${active.id}/finish`, { method:'POST' }); setActive(null); load() } }
   const cancelWorkout = async () => { if (active && confirm('¿Cancelar este entrenamiento? Se eliminarán todas las series registradas.')) { try { setError(''); await api(`/workouts/${active.id}`, { method:'DELETE' }); setActive(null); await load() } catch (err:any) { setError(err.message) } } }
@@ -109,7 +179,7 @@ function ExercisePicker({catalog,choose,close}:{catalog:Exercise[];choose:(id:nu
 
 function Session({ workout, refresh, finish, cancelWorkout, error }:{ workout:Workout; refresh:() => Promise<void>; finish:() => void; cancelWorkout:() => void; error:string }) {
   const [weights, setWeights] = useState<Record<number,string>>({}), [weightTypes, setWeightTypes] = useState<Record<number,WeightType>>({}), [reps, setReps] = useState(''), [warm, setWarm] = useState(false), [adding, setAdding] = useState(false), [catalog, setCatalog] = useState<Exercise[]>([]), [recent, setRecent] = useState<Workout[]>([]), [referenceError, setReferenceError] = useState(''), [restUntil, setRestUntil] = useState<number|null>(null), [now, setNow] = useState(Date.now())
-  const loadReference = () => { setReferenceError(''); Promise.all([api(`/routines/${workout.routine_id}/recent-workouts?limit=2`), api('/exercises')]).then(([recentWorkouts, exercises]) => { setRecent(recentWorkouts); setCatalog(exercises); const previous = recentWorkouts[0], nextWeights:Record<number,string> = {}, nextTypes:Record<number,WeightType> = {}; workout.exercises.forEach(item => { const previousExercise = previous?.exercises.find((exercise:WorkoutExercise) => exercise.exercise_id === item.exercise_id); const suggestion = previousExercise?.sets.slice().reverse().find((set:WorkoutSet) => set.set_type === 'WORKING'); if (suggestion) { if (suggestion.load_value != null) nextWeights[item.id] = String(suggestion.load_value); nextTypes[item.id] = suggestion.weight_type } }); setWeights(nextWeights); setWeightTypes(nextTypes) }).catch((err:any) => setReferenceError(err.message)) }
+const loadReference = () => { setReferenceError(''); Promise.all([api(`/routines/${workout.routine_id}/recent-workouts?limit=2`), api('/exercises')]).then(([recentWorkouts, exercises]) => { setRecent(recentWorkouts); setCatalog(exercises); const previous = recentWorkouts[0], nextWeights:Record<number,string> = {}, nextTypes:Record<number,WeightType> = {}; workout.exercises.forEach(item => { const previousExercise = previous?.exercises.find((exercise:WorkoutExercise) => exercise.exercise_id === item.exercise_id); const suggestion = previousExercise?.sets.slice().reverse().find((set:WorkoutSet) => set.set_type === 'WORKING'); if (suggestion) { if (suggestion.load_value != null) nextWeights[item.id] = String(suggestion.load_value); nextTypes[item.id] = suggestion.weight_type } }); setWeights(current => ({ ...nextWeights, ...current })); setWeightTypes(current => ({ ...nextTypes, ...current })) }).catch((err:any) => setReferenceError(err.message)) }
   useEffect(() => { loadReference() }, [workout.id])
   useEffect(() => { if (!restUntil) return; const timer = window.setInterval(() => setNow(Date.now()), 1000); return () => window.clearInterval(timer) }, [restUntil])
   const reference = (item:WorkoutExercise) => { const found = recent[0]?.exercises.find(exercise => exercise.exercise_id === item.exercise_id); return found?.sets.slice().reverse().find(set => set.set_type === 'WORKING') }

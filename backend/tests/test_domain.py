@@ -1,37 +1,26 @@
-import os
-os.environ["DATABASE_URL"]="sqlite:///./test_gym.db"
 from datetime import datetime, timedelta, timezone
 from uuid import uuid4
+from contextlib import contextmanager
+from conftest import ORIGIN, PASSWORD
 from fastapi.testclient import TestClient
 from app.database import SessionLocal
-from app.config import settings
 from app.main import app
 from app.models import Exercise, Routine, Workout, WorkoutExercise, WorkoutSet
 
+@contextmanager
+def owner_client():
+    with TestClient(app, headers={"Origin": ORIGIN}) as client:
+        assert client.post("/auth/login", json={"username": "owner", "password": PASSWORD}).status_code == 200
+        yield client
+
+
 def test_health():
-    with TestClient(app) as client:
+    with owner_client() as client:
         assert client.get('/health').json() == {'status':'ok'}
 
 
-def test_production_cors_preflight_skips_token_guard(monkeypatch):
-    monkeypatch.setattr(settings, "app_env", "production")
-    monkeypatch.setattr(settings, "api_token", "quality-gate-token")
-
-    with TestClient(app) as client:
-        unauthorized = client.get('/routines', headers={'Origin': 'http://localhost:5173'})
-        preflight = client.options('/routines', headers={
-            'Origin': 'http://localhost:5173',
-            'Access-Control-Request-Method': 'GET',
-        })
-
-    assert unauthorized.status_code == 401
-    assert unauthorized.headers['access-control-allow-origin'] == 'http://localhost:5173'
-    assert preflight.status_code == 200
-    assert preflight.headers['access-control-allow-origin'] == 'http://localhost:5173'
-
-
 def test_completed_workout_detail_includes_sets_and_notes():
-    with TestClient(app) as client:
+    with owner_client() as client:
         db = SessionLocal()
         db.query(WorkoutSet).delete()
         db.query(WorkoutExercise).delete()
@@ -61,7 +50,7 @@ def test_completed_workout_detail_includes_sets_and_notes():
 
 
 def test_last_workout_returns_latest_completed_workout_with_sets():
-    with TestClient(app) as client:
+    with owner_client() as client:
         db = SessionLocal()
         db.query(WorkoutSet).delete(); db.query(WorkoutExercise).delete(); db.query(Workout).delete()
         db.query(Exercise).filter(Exercise.name == "Exercise last workout test").delete()
@@ -86,7 +75,7 @@ def test_last_workout_returns_latest_completed_workout_with_sets():
 
 def test_active_and_completed_workouts_can_be_deleted_with_children():
     unique = uuid4().hex[:8]
-    with TestClient(app) as client:
+    with owner_client() as client:
         db = SessionLocal()
         routine = Routine(name=f"DELETE_{unique}")
         exercise = Exercise(name=f"Exercise delete {unique}")
@@ -134,7 +123,7 @@ def test_active_and_completed_workouts_can_be_deleted_with_children():
 
 def test_recent_workouts_returns_latest_completed_for_routine_only():
     unique = uuid4().hex[:8]
-    with TestClient(app) as client:
+    with owner_client() as client:
         db = SessionLocal()
         routine = Routine(name=f"RECENT_{unique}")
         other_routine = Routine(name=f"OTHER_{unique}")
