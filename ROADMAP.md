@@ -48,3 +48,16 @@ Ideas detectadas durante el uso real. Cada feature se definirá y entregará en 
 - Estado: pendiente de más detalles del usuario.
 - Conservar la dirección Performance con verde lima como base.
 - Recopilar observaciones del uso real y ajustar el diseño según esos casos.
+
+## Calendario de asistencia
+
+- Estado: pendiente.
+- Calendario visual de los días con entrenamientos finalizados y acceso a sus sesiones.
+- Detalle y criterios: [Calendario de asistencia](features/workout-attendance-calendar.md).
+
+## Cargas en libras
+
+- Estado: pendiente de alinear el historial e implementar.
+- Usar lb por defecto, conforme al gimnasio del propietario.
+- Confirmar el significado de las cargas anteriores antes de convertirlas o cambiar sus etiquetas.
+- Detalle y criterios: [Cargas en libras](features/pounds-load-units.md).
