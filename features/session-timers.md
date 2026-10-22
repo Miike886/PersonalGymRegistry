@@ -23,4 +23,5 @@
 ## Delivery
 
 - Branch feature/session-timers, base feature/free-text-exercises; PR #15.
+- PR #15 merged into its base; [integration into main](../docs/integration-main.md) remains pending.
 - Quality gate: reviewed PR contract/diff, migration and privacy; no blocking findings. 37 backend tests, build and real-browser recovery/skip pass. Remote CI tracked separately.

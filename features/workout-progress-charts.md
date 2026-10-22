@@ -19,5 +19,5 @@
 
 - Pure-model tests cover mixed units/types, missing/zero loads, warmups, assisted/bodyweight metrics, active exclusion, inclusive/reversed ranges and KPIs.
 - Production build, backend regression and responsive real-browser chart filters/detail navigation run before handoff.
-- Branch feature/workout-progress-charts; base feature/workout-attendance-calendar; PR #18, open.
+- Branch feature/workout-progress-charts; base feature/workout-attendance-calendar; PR #18 merged into its base; [integration into main](../docs/integration-main.md) remains pending.
 - Quality gate: no blocking findings after reviewing unit/type isolation, nullable loads, completed-only metrics, UTC/local dates, responsive charts and PR scope. 37 backend tests, model tests, build and real-browser flow pass; remote CI tracked at final handoff.

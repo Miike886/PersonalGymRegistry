@@ -20,4 +20,5 @@
 - Build, backend regression and real-browser tests cover drafts across reload, rest recovery and expiry/logout privacy.
 - No backend schema migration beyond the base PR's 0004.
 - Branch feature/background-session-continuity; base feature/session-timers; PR #16.
+- PR #16 merged into its base; [integration into main](../docs/integration-main.md) remains pending.
 - Quality gate resolved stale focus-refresh races: stale load responses cannot resurrect a just-finished/cancelled workout; lifecycle mutations are guarded against concurrent clicks. Malformed draft storage is sanitized. Optional PiP open races close on expired auth. Build/browser checks rerun after these fixes.

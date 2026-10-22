@@ -27,4 +27,4 @@
 - El flujo real cubre confirmación y código incorrectos, creación con entrada inmediata, historial conservado, registro cerrado al salir, posterior login y persistencia de sesión. Base aislada temporal; sin modificar producción.
 - Quality-gate: revisados título, descripción, archivos y diff de PR #20 contra su base; autorización, activación privada, exclusión de segunda cuenta, preservación del historial, migración, cookies y errores móviles. Sin hallazgos bloqueantes. Se protegió el downgrade para no eliminar credenciales y se serializó la lectura de credenciales de login con el registro; pruebas relevantes repetidas correctamente. CI remoto se comprueba al entregar.
 - Rama: feature/owner-registration; base: feature/session-interaction-polish (PR #19).
-- Pull request: [#20](https://github.com/Miike886/PersonalGymRegistry/pull/20), abierta; sin merge ni despliegue de producción.
+- Pull request: [#20](https://github.com/Miike886/PersonalGymRegistry/pull/20), integrada en feature/session-interaction-polish; pendiente de [integración a main](../docs/integration-main.md) y despliegue de producción.
