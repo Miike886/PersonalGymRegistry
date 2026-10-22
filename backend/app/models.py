@@ -65,6 +65,7 @@ class WorkoutSet(Base):
     position: Mapped[int] = mapped_column(Integer)
     reps: Mapped[int] = mapped_column(Integer)
     load_value: Mapped[float | None] = mapped_column(nullable=True)
+    load_unit: Mapped[str] = mapped_column(String(2), default="lb", server_default="kg")
     weight_type: Mapped[WeightType] = mapped_column(Enum(WeightType), default=WeightType.EXTERNAL)
     set_type: Mapped[SetType] = mapped_column(Enum(SetType), default=SetType.WORKING)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

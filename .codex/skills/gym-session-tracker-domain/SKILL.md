@@ -17,7 +17,7 @@ Use this skill whenever a change affects the Gym Session Tracker domain model, A
 - Starting a workout copies the current `RoutineExercise` entries into `WorkoutExercise` records. Never use routine entries as the session's mutable state.
 - `WorkoutExercise.exercise_name_snapshot` is immutable historical data. Renaming or removing a catalog exercise must not rewrite prior workout names.
 - Workout exercises may be added, skipped, reordered, or omitted without changing the routine template. Preserve an explicit, stable position for exercises and for sets.
-- A `WorkoutSet` records positive `reps`; all loads are kilograms in V1. `load_value` is nullable for bodyweight work.
+- A `WorkoutSet` records positive `reps`; new loads default to pounds (lb), and each set retains its explicit kg/lb unit. Existing records retain kg without changing numeric values; never reinterpret or convert legacy loads without confirming their actual meaning. `load_value` is nullable for bodyweight work.
 - Load conventions describe the catalog exercise (`TOTAL` or `PER_HAND`). Weight types describe the recorded set (`EXTERNAL`, `BODYWEIGHT`, `BODYWEIGHT_PLUS`, `BODYWEIGHT_ASSISTED`); do not conflate them.
 - Sets distinguish `WORKING` from `WARMUP`. Do not introduce volume, PR, 1RM, charts, authentication, supersets, or offline sync unless explicitly requested.
 
