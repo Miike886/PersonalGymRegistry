@@ -1,13 +1,25 @@
 from datetime import datetime
-from pydantic import BaseModel, ConfigDict, Field
+from typing import Literal
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from .models import LoadConvention, SetType, WeightType
 
 class ORMModel(BaseModel): model_config = ConfigDict(from_attributes=True)
 class ExerciseOut(ORMModel): id:int; name:str; load_convention:LoadConvention; is_active:bool
 class RoutineExerciseOut(ORMModel): id:int; position:int; exercise:ExerciseOut
 class RoutineOut(ORMModel): id:int; name:str; exercises:list[RoutineExerciseOut]=[]
-class SetCreate(BaseModel): reps:int=Field(gt=0, le=999); load_value:float|None=Field(default=None, ge=0); weight_type:WeightType=WeightType.EXTERNAL; set_type:SetType=SetType.WORKING
-class SetUpdate(BaseModel): reps:int|None=Field(default=None,gt=0); load_value:float|None=Field(default=None,ge=0); weight_type:WeightType|None=None; set_type:SetType|None=None
+class SetCreate(BaseModel): reps:int=Field(gt=0, le=999); load_value:float|None=Field(default=None, ge=0); load_unit:Literal["kg","lb"]="lb"; weight_type:WeightType=WeightType.EXTERNAL; set_type:SetType=SetType.WORKING
+class SetUpdate(BaseModel):
+    reps:int|None=Field(default=None,gt=0)
+    load_value:float|None=Field(default=None,ge=0)
+    load_unit:Literal["kg","lb"]|None=None
+    weight_type:WeightType|None=None
+    set_type:SetType|None=None
+
+    @field_validator("load_unit")
+    @classmethod
+    def non_null_unit(cls, value):
+        if value is None: raise ValueError("La unidad no puede ser nula")
+        return value
 class SetOut(SetCreate, ORMModel): id:int; position:int; created_at:datetime
 class WorkoutExerciseCreate(BaseModel): exercise_id:int; position:int|None=None
 class WorkoutExerciseUpdate(BaseModel): position:int|None=Field(default=None,ge=1); skipped:bool|None=None
