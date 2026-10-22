@@ -2,11 +2,11 @@ from contextlib import asynccontextmanager
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
-from fastapi.responses import JSONResponse
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session, joinedload
 from .database import Base, engine, get_db
 from .config import settings
+from .auth import require_owner, router as auth_router
 from .models import Exercise, Routine, RoutineExercise, Workout, WorkoutExercise, WorkoutSet
 from .schemas import (ExerciseOut, RoutineOut, SetCreate, SetOut, SetUpdate, WorkoutCreate, WorkoutExerciseCreate, WorkoutExerciseOut, WorkoutExerciseUpdate, WorkoutOut)
 
@@ -23,15 +23,22 @@ async def lifespan(app: FastAPI):
     if settings.app_env != "production": Base.metadata.create_all(engine)
     yield
 
-app = FastAPI(title="Gym Session Tracker", lifespan=lifespan, docs_url=None if settings.app_env == "production" else "/docs")
-@app.middleware("http")
-async def token_guard(request: Request, call_next):
-    if request.method == "OPTIONS":
-        return await call_next(request)
-    if settings.app_env == "production" and request.url.path != "/health" and (not settings.api_token or request.headers.get("X-App-Token") != settings.api_token): return JSONResponse(status_code=401, content={"detail":"No autorizado"})
-    return await call_next(request)
+app = FastAPI(
+    title="Gym Session Tracker", lifespan=lifespan, dependencies=[Depends(require_owner)],
+    docs_url=None if settings.app_env == "production" else "/docs",
+    redoc_url=None if settings.app_env == "production" else "/redoc",
+    openapi_url=None if settings.app_env == "production" else "/openapi.json",
+)
+app.include_router(auth_router)
 
-# Register CORS after the guard so it wraps all responses, including authorization failures.
+@app.middleware("http")
+async def private_responses(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["Cache-Control"] = "private, no-store"
+    response.headers["CDN-Cache-Control"] = "no-store"
+    response.headers["Vercel-CDN-Cache-Control"] = "no-store"
+    return response
+
 app.add_middleware(CORSMiddleware, allow_origins=[origin.strip() for origin in settings.cors_origins.split(",")], allow_methods=["*"], allow_headers=["*"])
 app.add_middleware(TrustedHostMiddleware, allowed_hosts=[host.strip() for host in settings.allowed_hosts.split(",")])
 

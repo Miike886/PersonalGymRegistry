@@ -7,8 +7,9 @@ Primer vertical slice móvil para registrar entrenamientos personales. La API es
 1. Copia `.env.example` a `.env`.
 2. Inicia PostgreSQL: `docker compose up -d db`.
 3. En una terminal: `cd backend`, ejecuta `uv sync`, después `uv run alembic upgrade head` y `uv run python seed.py`. Esto crea y administra automáticamente `.venv` y usa `uv.lock` para instalaciones reproducibles.
-4. Inicia la API: desde `backend`, `uv run uvicorn app.main:app --reload`.
-5. En otra terminal: `cd frontend`, ejecuta `npm install` y `npm run dev`.
+4. Ejecuta `uv run python -m app.auth_cli`, escribe y confirma una contraseña de 12 a 128 caracteres. Guarda el hash generado en `OWNER_PASSWORD_HASH` de tu `.env` y elige `OWNER_USERNAME`. La contraseña se solicita oculta y no se pasa como argumento de terminal.
+5. Inicia la API: desde `backend`, `uv run uvicorn app.main:app --reload`.
+6. En otra terminal: `cd frontend`, ejecuta `npm ci` y `npm run dev`. Abre `http://localhost:5173` e inicia sesión con el usuario y contraseña configurados.
 
 La interfaz queda disponible en `http://localhost:5173` y la documentación de la API en `http://localhost:8000/docs`.
 
@@ -22,10 +23,32 @@ La interfaz queda disponible en `http://localhost:5173` y la documentación de l
 
 > En una instalación nueva usa Alembic como fuente de esquema. `create_all` en el arranque existe solo para facilitar pruebas locales ligeras.
 
-## Piloto de producción
+## Acceso privado y producción
 
-Configura `APP_ENV=production`, `DATABASE_URL`, `API_TOKEN`, `CORS_ORIGINS`, `VITE_API_URL` y `VITE_API_TOKEN` en los entornos de despliegue. Ejecuta `uv run alembic upgrade head` y `uv run python seed.py` explícitamente contra la base de Neon antes de iniciar la API. En producción el backend no crea tablas automáticamente.
+El acceso corresponde a una única cuenta propietaria, sin registro público. Todas las rutas de entrenamientos requieren sesión, también al llamar directamente al backend. El login se recuerda por 30 días en cada dispositivo si se mantiene seleccionada la casilla correspondiente. Sin ella, se usa una cookie de sesión sin Max-Age y el servidor limita el acceso a 12 horas.
 
-El token compartido protege un piloto personal, pero no sustituye autenticación de usuarios para una API pública.
+Configura estas variables únicamente en el backend:
 
-Para Vercel crea dos proyectos desde el mismo repositorio: uno con Root Directory `frontend` y otro con Root Directory `backend`. Configura `CORS_ORIGINS` con el dominio del frontend y `ALLOWED_HOSTS` con el dominio del backend. Antes del primer tráfico ejecuta las migraciones y el seed desde un entorno con acceso a Neon.
+- `APP_ENV=production`
+- `DATABASE_URL`: conexión Neon con `postgresql+psycopg://` y SSL.
+- `OWNER_USERNAME`: tu usuario.
+- `OWNER_PASSWORD_HASH`: hash Argon2 generado con `uv run python -m app.auth_cli`. Guárdalo como Secret; nunca la contraseña en texto plano.
+- `SESSION_DAYS=30`
+- `CORS_ORIGINS=https://personal-gym-registry.vercel.app`
+- `ALLOWED_HOSTS=personal-gym-registry-back.vercel.app`
+
+Antes de publicar, ejecuta `uv run alembic upgrade head` contra Neon. Esta migración conserva los entrenamientos y añade sesiones y control de intentos. Si ya tienes rutinas, no necesitas repetir el seed.
+
+En el frontend elimina `VITE_API_TOKEN` y `VITE_API_URL`. Elimina también `API_TOKEN` del backend: el antiguo token público deja de conceder acceso.
+
+Los proyectos Vercel mantienen las raíces `frontend` y `backend`. El frontend envía las solicitudes a `/api`; Vercel las dirige al backend definido en `frontend/vercel.json`. La cookie queda asociada al dominio del frontend y permite recordar la sesión sin depender de cookies de terceros. Vite aplica el mismo proxy en desarrollo y preview local.
+
+Publica primero el backend con variables y migración listas, y después el frontend. Durante el cambio, un frontend antiguo puede pedir volver a cargar porque su token ya no funciona. Un preview del frontend apunta por defecto al backend de producción: para probar un backend preview hay que cambiar la dirección del proxy en un entorno aislado y autorizar el origen exacto del frontend preview.
+
+Cerrar sesión revoca ese dispositivo. Cambiar `OWNER_PASSWORD_HASH` o `OWNER_USERNAME` y desplegar el backend invalida todas las sesiones anteriores. Para recuperar acceso, genera un hash nuevo y reemplázalo en Vercel. Diez intentos fallidos bloquean el login durante el resto de una ventana de 15 minutos, compartida entre instancias; también afecta al propietario durante ese periodo.
+
+## Verificación del login
+
+Ejecuta `uv run pytest -q` desde `backend`. Para comprobar el flujo real en navegador, instala las dependencias de ambos proyectos, ejecuta `npm run build` en `frontend` y después `node scripts/test-owner-auth.mjs` en esa misma carpeta. En Windows usa Edge instalado; en Linux ejecuta primero `npx playwright install --with-deps chromium`.
+
+La prueba crea una base SQLite temporal y servidores exclusivos en los puertos 8319 y 4179; no usa la base de tu `.env` ni Neon. Se ejecuta también en CI.
