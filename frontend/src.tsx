@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import './style.css'
+import { Progress } from './progress'
 import { AttendanceCalendar } from './attendance'
 import { clearDrafts, readDraft, saveDraft, useWallClock, FloatingTimer } from './session-continuity'
 
@@ -111,7 +112,7 @@ function App() {
 }
 
 function WorkoutApp({authVersion}:{authVersion:number}) {
-  const [active, setActive] = useState<Workout|null>(null), [routines, setRoutines] = useState<any[]>([]), [history, setHistory] = useState<Workout[]>([]), [selected, setSelected] = useState<Workout|null>(null), [view, setView] = useState<'home'|'history'|'detail'|'session'|'calendar'>('home'), [error, setError] = useState(''), [loadingDetail, setLoadingDetail] = useState(false)
+  const [active, setActive] = useState<Workout|null>(null), [routines, setRoutines] = useState<any[]>([]), [history, setHistory] = useState<Workout[]>([]), [selected, setSelected] = useState<Workout|null>(null), [view, setView] = useState<'home'|'history'|'detail'|'session'|'calendar'|'progress'>('home'), [error, setError] = useState(''), [loadingDetail, setLoadingDetail] = useState(false)
   const initialLoad = useRef(true),loadVersion=useRef(0),mutating=useRef(false)
   const load = async () => {
     if(mutating.current)return
@@ -138,10 +139,10 @@ function WorkoutApp({authVersion}:{authVersion:number}) {
   const openDetail = async (workoutId:number) => { try { setError(''); setLoadingDetail(true); setSelected(await api(`/workouts/${workoutId}`)); setView('detail') } catch (err:any) { setError(err.message) } finally { setLoadingDetail(false) } }
 
   return <><div className={active ? 'browsing-active' : ''} hidden={view==='session'}>{view==='detail' && selected ? <WorkoutDetail workout={selected} back={()=>setView('history')} deleteWorkout={deleteWorkout} error={error}/> : <main>
-    <header className="topbar"><Brand /><nav aria-label="Navegación principal"><button className={view === 'home' ? 'nav-active' : ''} onClick={() => setView('home')}>Entrenar</button><button className={view === 'history' ? 'nav-active' : ''} onClick={() => setView('history')}>Historial</button><button className={view==='calendar'?'nav-active':''} onClick={()=>setView('calendar')}>Calendario</button></nav></header>
+    <header className="topbar"><Brand /><nav aria-label="Navegación principal"><button className={view === 'home' ? 'nav-active' : ''} onClick={() => setView('home')}>Entrenar</button><button className={view === 'history' ? 'nav-active' : ''} onClick={() => setView('history')}>Historial</button><button className={view==='calendar'?'nav-active':''} onClick={()=>setView('calendar')}>Calendario</button><button className={view==='progress'?'nav-active':''} onClick={()=>setView('progress')}>Progreso</button></nav></header>
     <ErrorNotice message={error} />
     <div className="hero"><div><p className="eyebrow">{view === 'home' ? 'TU PRÓXIMA SESIÓN' : 'TU RECORRIDO'}</p><h1>{view === 'home' ? <>Cada serie<br /><em>cuenta.</em></> : <>Trabajo hecho.<br /><em>Fuerza ganada.</em></>}</h1><p className="hero-description">{view === 'home' ? 'Elige tu rutina. Encuentra tu ritmo. Hazla tuya.' : 'Vuelve a tus entrenamientos y encuentra tu referencia.'}</p></div><div className="hero-art" aria-hidden="true"><span>///</span><small>KEEP SHOWING UP</small></div></div>
-    {view==='calendar'?<AttendanceCalendar workouts={history} open={openDetail}/>:view === 'history' ? <>
+    {view==='progress'?<Progress workouts={history} open={openDetail}/>:view==='calendar'?<AttendanceCalendar workouts={history} open={openDetail}/>:view === 'history' ? <>
       <div className="section-heading"><h2>Sesiones terminadas</h2><span className="badge">{history.length} sesiones</span></div>
       {loadingDetail && <p role="status" className="muted">Abriendo sesión…</p>}
       {history.length ? <div className="history">{history.map(workout => <button className="history-card" key={workout.id} onClick={() => openDetail(workout.id)}>
