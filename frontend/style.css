@@ -221,3 +221,13 @@ main{padding-bottom:112px}
 .exercise-history-row{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px}
 .exercise-history-row time{font-size:10px}
 .exercise-history-row b{color:#e1e7d6;font-size:11px;font-weight:600}
+.session-heading-navigation{display:flex;align-items:center;gap:18px;min-width:0}
+.session-back{display:flex;align-items:center;gap:4px;min-width:44px;padding:10px 8px;background:transparent;border-color:transparent;color:var(--muted)}
+.session-back svg{width:22px;height:22px;flex:none}
+.session-back span{font-size:13px}
+.resume-session .resume-label{display:grid;gap:3px;text-align:left;min-width:0}
+.resume-session .resume-label b{font-size:14px;font-weight:750}
+.resume-session small{color:#35461b;font-size:10px;font-weight:500}
+.resume-session .session-bar-time{display:grid;gap:2px;text-align:right;flex-shrink:0}
+.session-bar-time b{font-size:23px;line-height:1.1;font-variant-numeric:tabular-nums}
+@media(max-width:600px){.session-heading-navigation{gap:12px}.workout-topbar>.live-badge{margin-left:auto}.resume-session{gap:10px}.resume-session .resume-label b{font-size:13px}}
