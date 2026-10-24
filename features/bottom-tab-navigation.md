@@ -20,9 +20,10 @@ Make the app's main destinations easier to reach on mobile and bring completed w
 ## Verification
 
 - `cd frontend && npm run build` passed TypeScript and generated the production PWA bundle.
+- `node scripts/test-owner-auth.mjs` passed the real browser flow, including browsing Historial through the calendar, opening session details, the Ajustes placeholder and responsive widths.
 - `git diff --check` passed.
 
 ## Delivery
 
 - Branch: `feature/bottom-tab-navigation-history-calendar-settings`.
-- Pull request: pending.
+- Pull request: [#22](https://github.com/Miike886/PersonalGymRegistry/pull/22), open.
