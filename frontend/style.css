@@ -216,3 +216,8 @@ main{padding-bottom:112px}
 .settings-placeholder h3{margin:0 0 8px;font-size:21px}
 .settings-placeholder p{max-width:42ch;margin:0;color:var(--muted);line-height:1.6}
 @media(max-width:600px){main{padding-bottom:104px}.bottom-navigation{left:0;right:0;bottom:0;transform:none;width:100%;padding:7px 8px calc(7px + env(safe-area-inset-bottom));border-radius:18px 18px 0 0;border-bottom:0;border-left:0;border-right:0;background:#171c14f5}.bottom-navigation button{min-height:56px;font-size:10px}.browsing-active{padding-bottom:164px}.resume-session{bottom:calc(84px + env(safe-area-inset-bottom))}}
+.exercise-history-reference{display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;margin:12px 0 18px;padding:10px 12px;border-left:2px solid #93b63c;border-radius:0 9px 9px 0;background:#d0fa5708;color:var(--muted);font-size:11px;line-height:1.5}
+.exercise-history-label{color:#aebe84;font-size:9px;font-weight:750;letter-spacing:.1em}
+.exercise-history-row{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px}
+.exercise-history-row time{font-size:10px}
+.exercise-history-row b{color:#e1e7d6;font-size:11px;font-weight:600}
