@@ -27,4 +27,4 @@ Show factual, read-only history for the exercise currently being recorded so the
 ## Delivery
 
 - Branch: `feature/exercise-recent-set-reference` (stacked on the bottom-navigation feature branch).
-- Pull request: pending.
+- Pull request: [#23](https://github.com/Miike886/PersonalGymRegistry/pull/23), open; stacked on PR #22.
