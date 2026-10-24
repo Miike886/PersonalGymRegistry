@@ -135,7 +135,8 @@ function App() {
 }
 
 function WorkoutApp({authVersion}:{authVersion:number}) {
-  const [active, setActive] = useState<Workout|null>(null), [routines, setRoutines] = useState<any[]>([]), [history, setHistory] = useState<Workout[]>([]), [selected, setSelected] = useState<Workout|null>(null), [view, setView] = useState<'home'|'history'|'detail'|'session'|'calendar'|'progress'>('home'), [error, setError] = useState(''), [loadingDetail, setLoadingDetail] = useState(false)
+  type AppView='home'|'history'|'detail'|'session'|'progress'|'settings'
+  const [active, setActive] = useState<Workout|null>(null), [routines, setRoutines] = useState<any[]>([]), [history, setHistory] = useState<Workout[]>([]), [selected, setSelected] = useState<Workout|null>(null), [view, setView] = useState<AppView>('home'), [error, setError] = useState(''), [loadingDetail, setLoadingDetail] = useState(false)
   const [lifecycleBusy,setLifecycleBusy]=useState(false)
   const initialLoad = useRef(true),loadVersion=useRef(0),mutating=useRef(false)
   const load = async () => {
@@ -164,16 +165,17 @@ function WorkoutApp({authVersion}:{authVersion:number}) {
   const openDetail = async (workoutId:number) => { try { setError(''); setLoadingDetail(true); setSelected(await api(`/workouts/${workoutId}`)); setView('detail') } catch (err:any) { setError(err.message) } finally { setLoadingDetail(false) } }
 
   return <><div className={active ? 'browsing-active' : ''} hidden={view==='session'}>{view==='detail' && selected ? <WorkoutDetail workout={selected} back={()=>setView('history')} deleteWorkout={deleteWorkout} error={error}/> : <main>
-    <header className="topbar"><Brand /><nav aria-label="Navegación principal"><button className={view === 'home' ? 'nav-active' : ''} onClick={() => setView('home')}>Entrenar</button><button className={view === 'history' ? 'nav-active' : ''} onClick={() => setView('history')}>Historial</button><button className={view==='calendar'?'nav-active':''} onClick={()=>setView('calendar')}>Calendario</button><button className={view==='progress'?'nav-active':''} onClick={()=>setView('progress')}>Progreso</button></nav></header>
+    <header className="topbar"><Brand /></header>
     <ErrorNotice message={error} />
     <div className="hero"><div><p className="eyebrow">{view === 'home' ? 'TU PRÓXIMA SESIÓN' : 'TU RECORRIDO'}</p><h1>{view === 'home' ? <>Cada serie<br /><em>cuenta.</em></> : <>Trabajo hecho.<br /><em>Fuerza ganada.</em></>}</h1><p className="hero-description">{view === 'home' ? 'Elige tu rutina. Encuentra tu ritmo. Hazla tuya.' : 'Vuelve a tus entrenamientos y encuentra tu referencia.'}</p></div><div className="hero-art" aria-hidden="true"><span>///</span><small>KEEP SHOWING UP</small></div></div>
-    {view==='progress'?<Progress workouts={history} open={openDetail}/>:view==='calendar'?<AttendanceCalendar workouts={history} open={openDetail}/>:view === 'history' ? <>
-      <div className="section-heading"><h2>Sesiones terminadas</h2><span className="badge">{history.length} sesiones</span></div>
+    {view==='progress'?<Progress workouts={history} open={openDetail}/>:view==='history'?<>
+      <div className="section-heading"><h2>Historial</h2><span className="badge">{history.filter(workout=>workout.ended_at).length} sesiones</span></div>
       {loadingDetail && <p role="status" className="muted">Abriendo sesión…</p>}
-      {history.length ? <div className="history">{history.map(workout => <button className="history-card" key={workout.id} onClick={() => openDetail(workout.id)}>
-        <span className="routine-tag" data-routine={workout.routine.name}>{workout.routine.name}</span><span className="history-date">{formatDate(workout.started_at)}</span><span className="history-meta">{duration(workout)} · {workout.exercises.reduce((total,item) => total + item.sets.length,0)} series</span><span className="card-arrow" aria-hidden="true">↗</span>
-      </button>)}</div> : <div className="empty-state"><span aria-hidden="true">↗</span><h3>Tu recorrido empieza aquí</h3><p>Al finalizar tu primer entrenamiento, podrás consultarlo en este espacio.</p><button className="primary" onClick={() => setView('home')}>Elegir rutina</button></div>}
-    </> : <>
+      <AttendanceCalendar workouts={history} open={openDetail}/>
+    </>:view==='settings'?<>
+      <div className="section-heading"><h2>Configuración</h2></div>
+      <section className="settings-placeholder"><span className="settings-placeholder-icon" aria-hidden="true">⚙</span><h3>Próximamente</h3><p>Este espacio se preparará para las opciones de tu cuenta y de la aplicación.</p></section>
+    </>: <>
       <div className="section-heading"><h2>El entrenamiento de hoy</h2><span className="eyebrow">A TU RITMO</span></div>
       <div className="routine-grid">{routines.map(routine => { const info= routineInfo[routine.name]; return <button className="routine" data-routine={routine.name} key={routine.id} disabled={!!active || lifecycleBusy} onClick={() => start(routine.id)}>
         <span className="routine-top"><span className="routine-tag">{routine.name}</span><span className="routine-number" aria-hidden="true">{info?.number || '↗'}</span></span>
@@ -183,10 +185,22 @@ function WorkoutApp({authVersion}:{authVersion:number}) {
     </>}
     <footer className="page-footer"><Brand /><span>UNA SERIE A LA VEZ.</span></footer>
   </main>}</div>
+    {view!=='session'&&<BottomNavigation view={view} navigate={setView}/>}
     {active && <div hidden={view!=='session'}><Session key={active.id} workout={active} lifecycleBusy={lifecycleBusy} refresh={load} finish={finish} cancelWorkout={cancelWorkout} error={error} browse={()=>setView('home')}/></div>}
     {active && <FloatingTimer workout={active}/>}
     {active && view!=='session' && <button className="resume-session" onClick={()=>setView('session')}>● Retomar {active.routine.name} <span>Entrenamiento en curso ↗</span></button>}
   </>
+}
+
+function BottomNavigation({view,navigate}:{view:'home'|'history'|'detail'|'session'|'progress'|'settings';navigate:(view:'home'|'history'|'detail'|'session'|'progress'|'settings')=>void}) {
+  const items=[
+    {id:'home' as const,label:'Entrenar',path:<><path d="m3 10 9-7 9 7"/><path d="M5 9v11h14V9M9 20v-6h6v6"/></>},
+    {id:'history' as const,label:'Historial',path:<><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M16 2v4M8 2v4M3 10h18M8 14h3M8 17h6"/></>},
+    {id:'progress' as const,label:'Progreso',path:<><path d="M3 3v18h18"/><path d="m7 14 4-4 3 3 6-7"/></>},
+    {id:'settings' as const,label:'Ajustes',path:<><circle cx="12" cy="12" r="3"/><path d="m19.4 15 .1.1 1.4 1.1-1.4 2.4-1.7-.6a8 8 0 0 1-1.7 1l-.3 1.8h-2.8l-.3-1.8a8 8 0 0 1-1.7-1l-1.7.6L8 16.2l1.4-1.1a8 8 0 0 1 0-2l-1.4-1.2 1.4-2.4 1.7.6a8 8 0 0 1 1.7-1l.3-1.8h2.8l.3 1.8a8 8 0 0 1 1.7 1l1.7-.6 1.4 2.4-1.4 1.2a8 8 0 0 1-.2 1.9Z" transform="translate(-1 -2)"/></>}
+  ]
+  const current=view==='detail'?'history':view
+  return <nav className="bottom-navigation" aria-label="Navegación principal">{items.map(item=><button key={item.id} className={current===item.id?'nav-active':''} aria-current={current===item.id?'page':undefined} onClick={()=>navigate(item.id)}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{item.path}</svg><span>{item.label}</span></button>)}</nav>
 }
 
 
