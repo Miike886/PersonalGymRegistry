@@ -188,7 +188,7 @@ function WorkoutApp({authVersion}:{authVersion:number}) {
     </>}
     <footer className="page-footer"><Brand /><span>UNA SERIE A LA VEZ.</span></footer>
   </main>}</div>
-    {view!=='session'&&<BottomNavigation view={view} navigate={setView}/>}
+    <BottomNavigation view={view} navigate={destination=>destination==='home'&&active?resumeSession():setView(destination)}/>
     {active && <div hidden={view!=='session'}><Session key={active.id} workout={active} history={history} lifecycleBusy={lifecycleBusy} refresh={load} finish={finish} cancelWorkout={cancelWorkout} error={error} browse={()=>setView(returnView)}/></div>}
     {active && <FloatingTimer workout={active}/>}
     {active && view!=='session' && <ActiveSessionBar workout={active} resume={resumeSession}/>}
@@ -209,7 +209,7 @@ function BottomNavigation({view,navigate}:{view:'home'|'history'|'detail'|'sessi
     {id:'progress' as const,label:'Progreso',path:<><path d="M3 3v18h18"/><path d="m7 14 4-4 3 3 6-7"/></>},
     {id:'settings' as const,label:'Ajustes',path:<><circle cx="12" cy="12" r="3"/><path d="m19.4 15 .1.1 1.4 1.1-1.4 2.4-1.7-.6a8 8 0 0 1-1.7 1l-.3 1.8h-2.8l-.3-1.8a8 8 0 0 1-1.7-1l-1.7.6L8 16.2l1.4-1.1a8 8 0 0 1 0-2l-1.4-1.2 1.4-2.4 1.7.6a8 8 0 0 1 1.7-1l.3-1.8h2.8l.3 1.8a8 8 0 0 1 1.7 1l1.7-.6 1.4 2.4-1.4 1.2a8 8 0 0 1-.2 1.9Z" transform="translate(-1 -2)"/></>}
   ]
-  const current=view==='detail'?'history':view
+  const current=view==='detail'?'history':view==='session'?'home':view
   return <nav className="bottom-navigation" aria-label="Navegación principal">{items.map(item=><button key={item.id} className={current===item.id?'nav-active':''} aria-current={current===item.id?'page':undefined} onClick={()=>navigate(item.id)}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{item.path}</svg><span>{item.label}</span></button>)}</nav>
 }
 
@@ -269,12 +269,16 @@ function ExercisePicker({catalog,choose,custom,close,draft,setDraft}:{catalog:Ex
 
 function Session({ workout, history, refresh, finish, cancelWorkout, error, browse, lifecycleBusy }:{ workout:Workout; history:Workout[]; refresh:() => Promise<void>; finish:() => void; cancelWorkout:() => void; error:string; browse:()=>void; lifecycleBusy:boolean }) {
   const [draft]=useState(()=>readDraft(workout.id))
+  const [selectedExerciseId,setSelectedExerciseId]=useState<number|undefined>(draft.selectedExerciseId)
+  const orderedExercises=[...workout.exercises].sort((a,b)=>a.position-b.position)
+  const selectedExercise=orderedExercises.find(item=>item.id===selectedExerciseId)||orderedExercises[0]
+  const selectedIndex=selectedExercise?orderedExercises.findIndex(item=>item.id===selectedExercise.id):-1
   const [weights, setWeights] = useState<Record<number,string>>(draft.weights||{}), [weightTypes, setWeightTypes] = useState<Record<number,WeightType>>(draft.weightTypes||{}), [reps, setReps] = useState<Record<number,string>>(draft.repsById || (draft.reps && workout.exercises[0]?{[workout.exercises[0].id]:draft.reps}:{})), [warm, setWarm] = useState<Record<number,boolean>>(draft.warmsById || (draft.warm && workout.exercises[0]?{[workout.exercises[0].id]:true}:{})), [adding, setAdding] = useState(false), [catalog, setCatalog] = useState<Exercise[]>([]), [catalogError, setCatalogError] = useState('')
   const now=useWallClock()
   const loadCatalog = () => { setCatalogError(''); api('/exercises').then(setCatalog).catch((err:any)=>setCatalogError(err.message)) }
   useEffect(() => { loadCatalog() }, [workout.id])
   const [customDraft,setCustomDraft]=useState<ExerciseDraft>(draft.customDraft||{name:'',convention:'TOTAL'})
-  useEffect(()=>{saveDraft(workout.id,{weights,weightTypes,repsById:reps,warmsById:warm,customDraft})},[workout.id,weights,weightTypes,reps,warm,customDraft])
+  useEffect(()=>{saveDraft(workout.id,{selectedExerciseId:selectedExercise?.id,weights,weightTypes,repsById:reps,warmsById:warm,customDraft})},[workout.id,selectedExercise?.id,weights,weightTypes,reps,warm,customDraft])
   const exercise = (item:WorkoutExercise) => catalog.find(entry => entry.id === item.exercise_id)
   const convention = (item:WorkoutExercise) => exercise(item)?.load_convention === 'PER_HAND' ? 'lb por mano' : 'lb totales'
   const typeFor = (item:WorkoutExercise):WeightType => weightTypes[item.id] || 'EXTERNAL'
@@ -296,13 +300,13 @@ function Session({ workout, history, refresh, finish, cancelWorkout, error, brow
   const editSet=(record:WorkoutSet)=>{setEditing({record,reps:String(record.reps),load:record.load_value===null?'':String(record.load_value)});setEditVisible(true)}
   const saveSet=async(changes:{reps:number;load_value:number|null})=>{if(!editing)return;await api(`/sets/${editing.record.id}`,{method:'PATCH',body:JSON.stringify(changes)});await refresh()}
   const deleteSet=(set:WorkoutSet)=>{if(confirm('¿Eliminar esta serie?'))run(async()=>{await api(`/sets/${set.id}`,{method:'DELETE'});await refresh()})}
-  const move=(item:WorkoutExercise,direction:number)=>run(async()=>{await api(`/workout-exercises/${item.id}`,{method:'PATCH',body:JSON.stringify({position:Math.max(1,item.position+direction)})});await refresh()})
+  const move=(item:WorkoutExercise,position:number)=>run(async()=>{await api(`/workout-exercises/${item.id}`,{method:'PATCH',body:JSON.stringify({position})});await refresh()})
   const toggle=(item:WorkoutExercise)=>run(async()=>{await api(`/workout-exercises/${item.id}`,{method:'PATCH',body:JSON.stringify({skipped:!item.skipped})});await refresh()})
-  const addExercise = async (exerciseId:number) => { await api(`/workouts/${workout.id}/exercises`, { method:'POST', body:JSON.stringify({ exercise_id:exerciseId }) }); setAdding(false); refresh() }
+  const addExercise = async (exerciseId:number) => { const item=await api(`/workouts/${workout.id}/exercises`, { method:'POST', body:JSON.stringify({ exercise_id:exerciseId }) });await refresh();setSelectedExerciseId(item.id);setAdding(false) }
   const addCustomExercise=async(name:string,convention:'TOTAL'|'PER_HAND')=>{
     const item=await api(`/workouts/${workout.id}/exercises`,{method:'POST',body:JSON.stringify({name,load_convention:convention})})
     setCatalog(current=>current.some(entry=>entry.id===item.exercise_id)?current:[...current,{id:item.exercise_id,name:item.exercise_name_snapshot,load_convention:convention}])
-    setCustomDraft({name:'',convention:'TOTAL'});setAdding(false);await refresh()
+    setCustomDraft({name:'',convention:'TOTAL'});await refresh();setSelectedExerciseId(item.id);setAdding(false)
   }
   const seconds = workout.rest_until ? Math.max(0, Math.ceil((timestamp(workout.rest_until) - now) / 1000)) : 0
   const elapsed = Math.max(0,Math.floor((now-timestamp(workout.started_at))/1000))
@@ -317,9 +321,13 @@ function Session({ workout, history, refresh, finish, cancelWorkout, error, brow
     {seconds > 0 && <div className="rest-timer" role="timer" aria-label="Tiempo de descanso restante"><div><p className="eyebrow">RECUPERA EL AIRE</p><b>Tu siguiente serie te espera.</b></div><span className="rest-clock">{Math.floor(seconds/60)}:{String(seconds%60).padStart(2,'0')}</span><button disabled={locked} onClick={skipRest}>Omitir descanso</button><div className="rest-track" aria-hidden="true"><span style={{width:(seconds/165*100)+'%'}} /></div></div>}
     <div className="workout-content">
       <div className="section-heading"><h2>Tu entrenamiento</h2><span className="eyebrow">{workout.routine.name}</span></div>
-      <div className="session">{workout.exercises.map(item=> { const records=recentExerciseRecords(history,item.exercise_id), type=typeFor(item); return <div className="exercise-group" key={item.id}><section className={'exercise-card '+(item.skipped ? 'skip' : '')}><fieldset className="exercise-fields" disabled={locked}>
+      {selectedExercise?<div className="exercise-switcher">
+        <p className="exercise-step" role="status">Ejercicio {selectedIndex+1} de {orderedExercises.length}</p>
+        <div className="exercise-switcher-controls"><button aria-label="Ejercicio anterior" disabled={locked||selectedIndex===0} onClick={()=>setSelectedExerciseId(orderedExercises[selectedIndex-1].id)}>←</button><label><span>Ejercicio actual</span><select aria-label="Ejercicio actual" value={selectedExercise.id} disabled={locked} onChange={event=>setSelectedExerciseId(Number(event.target.value))}>{orderedExercises.map(item=><option key={item.id} value={item.id}>{item.position}. {item.exercise_name_snapshot}{item.skipped?' · Omitido':''}</option>)}</select></label><button aria-label="Ejercicio siguiente" disabled={locked||selectedIndex===orderedExercises.length-1} onClick={()=>setSelectedExerciseId(orderedExercises[selectedIndex+1].id)}>→</button></div>
+      </div>:<div className="empty-state session-empty"><h3>Empieza con un ejercicio</h3><p>Agrega uno para registrar tus series y consultar su historial.</p></div>}
+      <div className="session">{(selectedExercise?[selectedExercise]:[]).map(item=> { const records=recentExerciseRecords(history,item.exercise_id), type=typeFor(item); return <div className="exercise-group" key={item.id}><section className={'exercise-card '+(item.skipped ? 'skip' : '')}><fieldset className="exercise-fields" disabled={locked}>
         <div className="exercise-heading"><span className="exercise-number">{String(item.position).padStart(2,'0')}</span><h2>{item.exercise_name_snapshot}</h2></div>
-        <div className="exercise-toolbar"><span className="badge">{item.skipped ? 'Omitido' : item.sets.length+' series'}</span><div className="exercise-actions"><button aria-label={'Mover arriba: '+item.exercise_name_snapshot} onClick={()=>move(item,-1)} disabled={item.position===1}>↑</button><button aria-label={'Mover abajo: '+item.exercise_name_snapshot} onClick={()=>move(item,1)} disabled={item.position===workout.exercises.length}>↓</button><button onClick={()=>toggle(item)}>{item.skipped ? 'Reanudar' : 'Saltar'}</button></div></div>
+        <div className="exercise-toolbar"><span className="badge">{item.skipped ? 'Omitido' : item.sets.length+' series'}</span><div className="exercise-actions"><label className="exercise-order"><span>Orden</span><select aria-label="Posición del ejercicio" value={item.position} onChange={event=>move(item,Number(event.target.value))}>{orderedExercises.map((entry,index)=><option key={entry.id} value={index+1}>{index+1}</option>)}</select></label><button onClick={()=>toggle(item)}>{item.skipped ? 'Reanudar' : 'Saltar'}</button></div></div>
         {!item.skipped && <>
           <div className="sets">{item.sets.map(set=><div className="set-row" key={set.id}><span className="set-number">{String(set.position).padStart(2,'0')}</span><span className="set-value">{referenceSetLabel(set)}<small>{set.set_type==='WARMUP' ? 'Calentamiento' : 'Trabajo'}</small></span><div className="set-actions"><button aria-label={'Editar serie '+set.position+' de '+item.exercise_name_snapshot} onClick={()=>editSet(set)}>Editar</button><button className="icon-danger" aria-label={'Eliminar serie '+set.position+' de '+item.exercise_name_snapshot} onClick={()=>deleteSet(set)}>×</button></div></div>)}</div>
           <div className="quick">

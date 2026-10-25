@@ -20,6 +20,19 @@ def workout_or_404(db: Session, workout_id: int):
     if not result: raise HTTPException(404, "Workout no encontrado")
     return result
 
+def place_exercise(db: Session, item: WorkoutExercise, position: int):
+    siblings = list(db.scalars(select(WorkoutExercise).where(WorkoutExercise.workout_id == item.workout_id).order_by(WorkoutExercise.position)))
+    ordered = [sibling for sibling in siblings if sibling is not item]
+    ordered.insert(min(position - 1, len(ordered)), item)
+    # Clear the old range for every row, including the moved exercise.
+    offset = max(sibling.position for sibling in ordered) + len(ordered) + 1
+    for index, sibling in enumerate(ordered, offset):
+        sibling.position = index
+    db.flush()
+    for index, sibling in enumerate(ordered, 1):
+        sibling.position = index
+    db.flush()
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     if settings.app_env != "production": Base.metadata.create_all(engine)
@@ -127,13 +140,7 @@ def update_exercise(item_id:int, body:WorkoutExerciseUpdate, db:Session=Depends(
     if db.get(Workout,item.workout_id).ended_at: raise HTTPException(409,"El historial es de solo lectura")
     changes=body.model_dump(exclude_unset=True)
     if "position" in changes and changes["position"] != item.position:
-        new_position=changes.pop("position")
-        siblings=db.scalars(select(WorkoutExercise).where(WorkoutExercise.workout_id==item.workout_id,WorkoutExercise.id!=item.id).order_by(WorkoutExercise.position)).all()
-        # Re-number all siblings, then insert the selected exercise at its desired position.
-        for index, sibling in enumerate(siblings, 1000): sibling.position=index
-        db.flush()
-        ordered=siblings[:max(0,new_position-1)]+[item]+siblings[max(0,new_position-1):]
-        for index, sibling in enumerate(ordered,1): sibling.position=index
+        place_exercise(db, item, changes.pop("position"))
     for key,value in changes.items(): setattr(item,key,value)
     db.commit(); db.refresh(item); return item
 
