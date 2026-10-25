@@ -5,6 +5,9 @@ on:
   push:
     branches:
       - main
+  workflow_dispatch:
+  schedule:
+    - cron: '23 9 * * 1'
 
 permissions:
   contents: read
@@ -27,7 +30,60 @@ jobs:
         with:
           enable-cache: true
       - run: uv sync --locked --dev
+      - run: uv run --locked python ../scripts/check_requirements.py
       - run: uv run pytest -q
+
+  postgres:
+    name: PostgreSQL concurrency
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: gym_integrity_test
+          POSTGRES_USER: gym_test
+          POSTGRES_PASSWORD: isolated-test-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U gym_test -d gym_integrity_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      TEST_POSTGRES_URL: postgresql+psycopg://gym_test:isolated-test-password@127.0.0.1:5432/gym_integrity_test
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9
+      - run: uv sync --locked --dev
+        working-directory: backend
+      - run: uv run --locked pytest -q integration
+        working-directory: backend
+
+  dependency-audit:
+    name: Dependency audits
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+      - run: python scripts/audit_python.py
+      - run: npm audit --package-lock-only --audit-level=low
+        working-directory: frontend
 
   frontend:
     name: Frontend build

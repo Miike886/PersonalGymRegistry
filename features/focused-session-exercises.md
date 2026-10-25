@@ -14,6 +14,7 @@
 - Selección local por ID de ejercicio de sesión; el servidor mantiene el orden y los registros como fuente de verdad.
 - Se corrige el reordenamiento de API en dos fases para evitar colisiones temporales de posiciones únicas.
 - Sin nuevas tablas, migraciones, recomendaciones de carga ni sincronización offline.
+- Mantenimiento de integridad: las mutaciones se serializan por entrenamiento en PostgreSQL; insertar en una posición ocupada desplaza los ejercicios existentes. Se conserva el ordenamiento en dos fases y el ejercicio seleccionado por ID.
 
 ## Verificación
 

@@ -4,7 +4,7 @@ Ideas detectadas durante el uso real. Cada feature se definirá y entregará en 
 
 Las PR #12–#20 se integraron en `main` mediante la PR [#21](https://github.com/Miike886/PersonalGymRegistry/pull/21), fusionada el 22 de octubre de 2026. La activación y comprobación de producción se documentan por separado.
 
-Estado comprobado el 24 de octubre de 2026 (hora de México): las PR #22–#26 también están fusionadas; no hay PR abiertas. La prioridad actual es [mantener saludable el repositorio](docs/repository-health.md). Esto no implica que todo el trabajo local esté integrado: existe una rama de hardening pendiente de revisión.
+Estado comprobado el 24 de octubre de 2026 (hora de México): las PR #22–#26 también están fusionadas; no hay PR abiertas. La prioridad actual es [mantener saludable el repositorio](docs/repository-health.md). La rama histórica de hardening se revisó y sus correcciones vigentes se recuperaron selectivamente en los commits locales de mantenimiento; no se debe fusionar completa ni reintroducir propuestas descartadas.
 
 ## Entregas recientes
 

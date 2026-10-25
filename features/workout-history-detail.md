@@ -9,6 +9,7 @@ Allow completed gym sessions to be opened from history and reviewed without modi
 - History contains only finished workouts.
 - A tap opens a read-only session detail with routine, weekday/date, duration, exercises, skipped exercises, and working or warm-up sets.
 - Session notes appear only when notes exist.
+- A late detail response cannot reopen the detail after navigating elsewhere; outdated errors are also ignored.
 
 ## Implementation
 
@@ -23,6 +24,7 @@ Allow completed gym sessions to be opened from history and reviewed without modi
 
 - `cd backend && uv run pytest -q` passes (2 tests).
 - Frontend build verified in the current repository health check; see [repository health](../docs/repository-health.md).
+- The real-browser flow holds a detail response, navigates to Ajustes and verifies that releasing it preserves the chosen destination.
 
 ## Delivery
 

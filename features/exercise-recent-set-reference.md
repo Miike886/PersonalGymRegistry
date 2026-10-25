@@ -18,6 +18,7 @@ Show factual, read-only history for the exercise currently being recorded so the
 - The session no longer requests routine-wide recent workouts. Catalog loading retains its own visible error and retry action.
 - Match records by canonical exercise id. Legacy free-text snapshots without an exercise id cannot be matched to a catalog exercise.
 - Only completed workout history is shown; working sets in the current active session are not treated as history.
+- Reference records for the selected exercise are memoized by history and canonical exercise ID, so timer ticks do not re-sort the full history.
 
 ## Verification
 

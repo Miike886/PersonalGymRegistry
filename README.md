@@ -6,7 +6,7 @@ Aplicación móvil para registrar entrenamientos personales. La API es la fuente
 
 1. Copia `.env.example` a `.env`.
 2. Inicia PostgreSQL: `docker compose up -d db`.
-3. En una terminal: `cd backend`, ejecuta `uv sync`, después `uv run alembic upgrade head` y `uv run python seed.py`. Esto crea y administra automáticamente `.venv` y usa `uv.lock` para instalaciones reproducibles.
+3. En una terminal: `cd backend`, ejecuta `uv sync --locked --dev`, después `uv run alembic upgrade head` y `uv run python seed.py`. Esto crea y administra automáticamente `.venv` y usa `uv.lock` para instalaciones reproducibles. El seed requiere que las migraciones ya estén aplicadas.
 4. Configura `OWNER_SETUP_TOKEN` en tu `.env` con un código privado aleatorio de 20 a 256 caracteres. Al abrir la app, crea tu usuario y contraseña usando ese código de activación; después elimina `OWNER_SETUP_TOKEN`. No publiques el código ni lo uses como contraseña. Alternativamente, el acceso anterior mediante `OWNER_USERNAME` y `OWNER_PASSWORD_HASH` sigue disponible mientras no exista una cuenta registrada.
 5. Inicia la API: desde `backend`, `uv run uvicorn app.main:app --reload`.
 6. En otra terminal: `cd frontend`, ejecuta `npm ci` y `npm run dev`. Abre `http://localhost:5173` e inicia sesión con el usuario y contraseña configurados.
@@ -57,3 +57,11 @@ Cerrar sesión revoca ese dispositivo. Crear la cuenta revoca todas las sesiones
 Ejecuta `uv run pytest -q` desde `backend`. Para comprobar el flujo real en navegador, instala las dependencias de ambos proyectos, ejecuta `npm run build` en `frontend` y después `node scripts/test-owner-auth.mjs` en esa misma carpeta. En Windows usa Edge instalado; en Linux ejecuta primero `npx playwright install --with-deps chromium`.
 
 La prueba crea una base SQLite temporal y servidores exclusivos en los puertos 8319 y 4179; no usa la base de tu `.env` ni Neon. Se ejecuta también en CI.
+
+## Integridad y dependencias
+
+`backend/pyproject.toml` y `backend/uv.lock` son la fuente de dependencias Python. `backend/requirements.txt` es una exportación runtime fijada para despliegue; no se edita a mano. Desde la raíz, ejecuta `uv run --project backend python scripts/check_requirements.py --write` al actualizar el lock y omite `--write` para comprobarlo. Ejecuta `uv run --project backend python scripts/audit_python.py` para auditar todos los paquetes del lock, incluidos desarrollo y otras plataformas. Para npm, usa `npm ci` y `npm audit --package-lock-only --audit-level=low` desde `frontend`.
+
+CI verifica la exportación, las auditorías y las regresiones PostgreSQL en cada PR, en cambios a `main` y cada lunes; también admite ejecución manual. La programación comenzará cuando el workflow actualizado esté publicado en la rama predeterminada.
+
+Las pruebas PostgreSQL usan migraciones reales y esquemas temporales que se eliminan al terminar. Configura `TEST_POSTGRES_URL` únicamente con una base local llamada `gym_integrity_test` y ejecuta `uv run --locked pytest -q integration` desde `backend`. Solo se admiten direcciones loopback; estas pruebas nunca deben apuntar a Neon ni a la base personal. Ejemplo con Docker: `docker run --rm --name gym-integrity-test -e POSTGRES_DB=gym_integrity_test -e POSTGRES_USER=gym_test -e POSTGRES_PASSWORD=isolated-test-password -p 127.0.0.1:55439:5432 -d postgres:16`. En PowerShell: `$env:TEST_POSTGRES_URL='postgresql+psycopg://gym_test:isolated-test-password@127.0.0.1:55439/gym_integrity_test'`. Al terminar, detén el contenedor con `docker stop gym-integrity-test`.

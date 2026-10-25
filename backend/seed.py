@@ -1,6 +1,6 @@
-from app.database import Base, SessionLocal, engine
+from app.database import SessionLocal
 from app.models import Exercise, LoadConvention, Routine, RoutineExercise
-Base.metadata.create_all(engine); db = SessionLocal()
+db = SessionLocal()
 routines = {n: db.query(Routine).filter_by(name=n).first() or Routine(name=n) for n in ("PUSH", "PULL", "LEGS", "FREE")}; db.add_all(routines.values()); db.flush()
 items = [("Press inclinado en Smith",LoadConvention.TOTAL),("Press inclinado en máquina (variante)",LoadConvention.TOTAL),("Press de hombro",LoadConvention.TOTAL),("Extensión de tríceps con cuerda",LoadConvention.TOTAL),("Pec fly",LoadConvention.TOTAL),("Elevaciones laterales",LoadConvention.TOTAL),("Fondos lastrados",LoadConvention.TOTAL),("Lat pulldown",LoadConvention.TOTAL),("Seated row",LoadConvention.TOTAL),("Curl hammer unilateral",LoadConvention.PER_HAND),("Curl bíceps banco inclinado unilateral",LoadConvention.PER_HAND),("Dominadas con peso corporal",LoadConvention.TOTAL),("Leg press",LoadConvention.TOTAL),("Extensión de cuádriceps",LoadConvention.TOTAL),("Curl femoral",LoadConvention.TOTAL),("Hip abductor",LoadConvention.TOTAL),("Hip adductor",LoadConvention.TOTAL),("Pantorrilla",LoadConvention.TOTAL)]
 catalog = {}

@@ -11,6 +11,7 @@ Let the user discard an active workout or permanently remove an unwanted complet
 - A completed workout detail offers `Eliminar entrenamiento` at the bottom of the screen.
 - Deleting a completed workout requires confirmation, removes it permanently, and returns to the refreshed history.
 - Failed deletions remain visible so the user can retry.
+- The delete button is disabled while processing; repeated activation sends only one request. Deletion shares the workout lifecycle guard and a server-side workout lock.
 
 ## Implementation
 
@@ -28,6 +29,7 @@ Let the user discard an active workout or permanently remove an unwanted complet
 - `cd backend && uv run pytest -q` passes (5 tests), including deletion of active and completed workouts and their dependent records.
 - `cd frontend && npm run build` passes and generates the production PWA bundle.
 - `git diff --check` passes.
+- Maintenance regression: real-browser failed deletion, double activation and successful retry; see [repository health](../docs/repository-health.md).
 
 ## Delivery
 

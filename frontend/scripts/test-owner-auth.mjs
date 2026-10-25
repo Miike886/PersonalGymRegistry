@@ -188,6 +188,23 @@ try {
   await page.getByRole('heading',{name:'Historial',exact:true}).waitFor()
   if(!await page.locator('.calendar-grid .attended').count())await page.getByRole('button',{name:'Mes anterior'}).click()
   await page.locator('.calendar-grid .attended').first().click()
+  const delayedDetail=/\/api\/workouts\/\d+$/
+  let releaseDetail,detailRequested
+  const detailGate=new Promise(resolve=>{releaseDetail=resolve})
+  const detailStarted=new Promise(resolve=>{detailRequested=resolve})
+  await page.route(delayedDetail,async route=>{const response=await route.fetch();detailRequested();await detailGate;await route.fulfill({response})})
+  await page.locator('.calendar-selection .history-card').first().click()
+  await detailStarted
+  await page.getByRole('button',{name:'Ajustes',exact:true}).click()
+  const detailResponse=page.waitForResponse(response=>delayedDetail.test(response.url()))
+  releaseDetail()
+  await detailResponse
+  await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))))
+  assert.equal(await page.getByRole('heading',{name:'Próximamente',exact:true}).count(),1)
+  await page.unroute(delayedDetail)
+  await page.getByRole('button',{name:'Historial',exact:true}).click()
+  if(!await page.locator('.calendar-grid .attended').count())await page.getByRole('button',{name:'Mes anterior'}).click()
+  await page.locator('.calendar-grid .attended').first().click()
   await page.locator('.calendar-selection .history-card').first().click()
   await page.getByRole('heading',{name:'Empuje.',exact:true}).waitFor()
   await page.getByRole('button',{name:/Retomar PUSH/}).click()
@@ -361,6 +378,20 @@ try {
   await page.locator('.exercise-group').filter({has:page.getByRole('heading',{name:'Ejercicio libre de prueba',exact:true})}).locator('.exercise-history-empty').waitFor()
   const catalog=await (await context.request.get(origin+'/api/exercises')).json()
   assert.equal(catalog.find(item=>item.name==='Ejercicio libre de prueba')?.load_convention,'PER_HAND')
+  const freeWorkout=await (await context.request.get(origin+'/api/workouts/active')).json()
+  await page.getByRole('button',{name:'Finalizar sesión',exact:false}).click()
+  await page.getByRole('heading',{name:'Historial',exact:true}).waitFor()
+  await page.locator('.calendar-selection .history-card').filter({hasText:'FREE'}).click()
+  let deletionRequests=0
+  const freeDelete='**/api/workouts/'+freeWorkout.id
+  await page.route(freeDelete,route=>{if(route.request().method()==='DELETE'){deletionRequests++;return route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({detail:'Fallo al eliminar; prueba de recuperación.'})})}return route.continue()})
+  await page.getByRole('button',{name:'Eliminar entrenamiento',exact:true}).evaluate(button=>{button.click();button.click()})
+  await page.getByRole('alert').filter({hasText:'Fallo al eliminar'}).waitFor()
+  assert.equal(deletionRequests,1)
+  await page.unroute(freeDelete)
+  await page.getByRole('button',{name:'Eliminar entrenamiento',exact:true}).click()
+  await page.getByRole('heading',{name:'Historial',exact:true}).waitFor()
+  assert.equal((await context.request.get(origin+'/api/workouts/'+freeWorkout.id)).status(),404)
   assert.deepEqual(errors,[])
   console.log('PASS: single-owner registration, confirmation/activation errors, preserved history, closed registration, real login/proxy, anonymous denial, wrong password, persistent browser session, CSRF, expired-session re-login with preserved inputs, recording/recovery, logout, independent exercise drafts, safe edits, failed-record retry, double-submit guard, calendars/charts and responsive widths.')
 } catch(error) {

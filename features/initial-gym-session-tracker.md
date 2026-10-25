@@ -15,6 +15,7 @@ Provide the first mobile-first vertical slice for recording personal gym session
 - React, TypeScript, Vite, and a PWA manifest in `frontend/`.
 - FastAPI, SQLAlchemy 2 models, Pydantic schemas, Alembic initial migration, seed data, and PostgreSQL Docker Compose support in `backend/`.
 - One active-workout constraint, historical exercise-name snapshots, stable exercise/set positions, and separate session exercises from routine templates.
+- Maintenance: workout mutations lock and refresh the parent state on PostgreSQL, simultaneous workout creation returns 409 for the active-session constraint, SQLite enforces foreign keys, and seed requires prior Alembic migrations. No schema change; see [repository health](../docs/repository-health.md).
 
 ## Limitations
 

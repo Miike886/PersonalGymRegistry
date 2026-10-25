@@ -14,6 +14,7 @@
 - POST /workouts/{id}/exercises accepts either exercise_id or name plus load_convention, never both.
 - Named creation is allowed only on active FREE sessions.
 - No migration; existing catalog and snapshot tables are reused.
+- Both catalog ID and name reject inactive exercises. Insertion at an occupied session position shifts existing exercises without changing their IDs, sets or routine template. Mutations lock and refresh the parent workout before validating its active state.
 
 ## Verification and limits
 

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import './style.css'
 import {SetEditor,type EditDraft} from './set-editor'
@@ -140,6 +140,9 @@ function WorkoutApp({authVersion}:{authVersion:number}) {
   const [returnView,setReturnView]=useState<Exclude<AppView,'session'>>('home')
   const [active, setActive] = useState<Workout|null>(null), [routines, setRoutines] = useState<any[]>([]), [history, setHistory] = useState<Workout[]>([]), [selected, setSelected] = useState<Workout|null>(null), [view, setView] = useState<AppView>('home'), [error, setError] = useState(''), [loadingDetail, setLoadingDetail] = useState(false)
   const [lifecycleBusy,setLifecycleBusy]=useState(false)
+  const detailVersion=useRef(0)
+  const navigate=(next:AppView)=>{detailVersion.current++;setLoadingDetail(false);setView(next)}
+  useEffect(()=>()=>{detailVersion.current++},[])
   const initialLoad = useRef(true),loadVersion=useRef(0),mutating=useRef(false)
   const load = async () => {
     if(mutating.current)return
@@ -155,19 +158,25 @@ function WorkoutApp({authVersion}:{authVersion:number}) {
   useEffect(()=>{const resume=()=>{if(document.visibilityState==='visible')load()};window.addEventListener('focus',resume);window.addEventListener('pageshow',resume);document.addEventListener('visibilitychange',resume);return()=>{loadVersion.current++;window.removeEventListener('focus',resume);window.removeEventListener('pageshow',resume);document.removeEventListener('visibilitychange',resume)}},[])
   const mutate=async(action:()=>Promise<void>)=>{
     if(mutating.current)return
-    mutating.current=true;setLifecycleBusy(true);loadVersion.current++;setError('')
+    mutating.current=true;setLifecycleBusy(true);loadVersion.current++;detailVersion.current++;setLoadingDetail(false);setError('')
     let failure=''
     try{await action()}catch(err){failure=err instanceof Error?err.message:'No se pudo guardar el cambio'}
     finally{mutating.current=false;await load();setLifecycleBusy(false);if(failure)setError(failure)}
   }
-  const start = (routineId:number) => mutate(async()=>{setActive(await api('/workouts',{method:'POST',body:JSON.stringify({routine_id:routineId})}));setReturnView('home');setView('session')})
-  const resumeSession=()=>{if(view!=='session'){setReturnView(view);setView('session')}}
-  const finish = () => {if(active && confirm('¿Finalizar entrenamiento?'))mutate(async()=>{await api(`/workouts/${active.id}/finish`,{method:'POST'});clearDrafts(active.id);setActive(null);setView('history')})}
-  const cancelWorkout = () => {if(active && confirm('¿Cancelar este entrenamiento? Se eliminarán todas las series registradas.'))mutate(async()=>{await api(`/workouts/${active.id}`,{method:'DELETE'});clearDrafts(active.id);setActive(null);setView('home')})}
-  const deleteWorkout = async (workout:Workout) => { if (confirm('¿Eliminar este entrenamiento del historial? Esta acción no se puede deshacer.')) { try { setError(''); await api(`/workouts/${workout.id}`, { method:'DELETE' }); setSelected(null); setView('history'); await load() } catch (err:any) { setError(err.message) } } }
-  const openDetail = async (workoutId:number) => { try { setError(''); setLoadingDetail(true); setSelected(await api(`/workouts/${workoutId}`)); setView('detail') } catch (err:any) { setError(err.message) } finally { setLoadingDetail(false) } }
+  const start = (routineId:number) => mutate(async()=>{setActive(await api('/workouts',{method:'POST',body:JSON.stringify({routine_id:routineId})}));setReturnView('home');navigate('session')})
+  const resumeSession=()=>{if(view!=='session'){setReturnView(view);navigate('session')}}
+  const finish = () => {if(active && confirm('¿Finalizar entrenamiento?'))mutate(async()=>{await api(`/workouts/${active.id}/finish`,{method:'POST'});clearDrafts(active.id);setActive(null);navigate('history')})}
+  const cancelWorkout = () => {if(active && confirm('¿Cancelar este entrenamiento? Se eliminarán todas las series registradas.'))mutate(async()=>{await api(`/workouts/${active.id}`,{method:'DELETE'});clearDrafts(active.id);setActive(null);navigate('home')})}
+  const deleteWorkout = async (workout:Workout) => {if(confirm('¿Eliminar este entrenamiento del historial? Esta acción no se puede deshacer.'))await mutate(async()=>{await api(`/workouts/${workout.id}`,{method:'DELETE'});setSelected(null);navigate('history')})}
+  const openDetail = async (workoutId:number) => {
+    if(mutating.current)return
+    const expected=++detailVersion.current
+    try {setError('');setLoadingDetail(true);const detail=await api(`/workouts/${workoutId}`);if(expected===detailVersion.current){setSelected(detail);setView('detail')}}
+    catch(err){if(expected===detailVersion.current)setError(err instanceof Error?err.message:'No se pudo abrir la sesión')}
+    finally{if(expected===detailVersion.current)setLoadingDetail(false)}
+  }
 
-  return <><div className={active ? 'browsing-active' : ''} hidden={view==='session'}>{view==='detail' && selected ? <WorkoutDetail workout={selected} back={()=>setView('history')} deleteWorkout={deleteWorkout} error={error}/> : <main>
+  return <><div className={active ? 'browsing-active' : ''} hidden={view==='session'}>{view==='detail' && selected ? <WorkoutDetail workout={selected} back={()=>navigate('history')} deleteWorkout={deleteWorkout} error={error} busy={lifecycleBusy}/> : <main>
     <header className="topbar"><Brand /></header>
     <ErrorNotice message={error} />
     <div className="hero"><div><p className="eyebrow">{view === 'home' ? 'TU PRÓXIMA SESIÓN' : 'TU RECORRIDO'}</p><h1>{view === 'home' ? <>Cada serie<br /><em>cuenta.</em></> : <>Trabajo hecho.<br /><em>Fuerza ganada.</em></>}</h1><p className="hero-description">{view === 'home' ? 'Elige tu rutina. Encuentra tu ritmo. Hazla tuya.' : 'Vuelve a tus entrenamientos y encuentra tu referencia.'}</p></div><div className="hero-art" aria-hidden="true"><span>///</span><small>KEEP SHOWING UP</small></div></div>
@@ -188,8 +197,8 @@ function WorkoutApp({authVersion}:{authVersion:number}) {
     </>}
     <footer className="page-footer"><Brand /><span>UNA SERIE A LA VEZ.</span></footer>
   </main>}</div>
-    <BottomNavigation view={view} navigate={destination=>destination==='home'&&active?resumeSession():setView(destination)}/>
-    {active && <div hidden={view!=='session'}><Session key={active.id} workout={active} history={history} lifecycleBusy={lifecycleBusy} refresh={load} finish={finish} cancelWorkout={cancelWorkout} error={error} browse={()=>setView(returnView)}/></div>}
+    <BottomNavigation view={view} navigate={destination=>destination==='home'&&active?resumeSession():navigate(destination)}/>
+    {active && <div hidden={view!=='session'}><Session key={active.id} workout={active} history={history} lifecycleBusy={lifecycleBusy} refresh={load} finish={finish} cancelWorkout={cancelWorkout} error={error} browse={()=>navigate(returnView)}/></div>}
     {active && <FloatingTimer workout={active}/>}
     {active && view!=='session' && <ActiveSessionBar workout={active} resume={resumeSession}/>}
   </>
@@ -214,7 +223,7 @@ function BottomNavigation({view,navigate}:{view:'home'|'history'|'detail'|'sessi
 }
 
 
-function WorkoutDetail({ workout, back, deleteWorkout, error }:{ workout:Workout; back:() => void; deleteWorkout:(workout:Workout) => void; error:string }) {
+function WorkoutDetail({ workout, back, deleteWorkout, error, busy }:{ workout:Workout; back:() => void; deleteWorkout:(workout:Workout) => void; error:string; busy:boolean }) {
   return <main><header className="topbar"><Brand /><button onClick={back}>← Historial</button></header>
     <div className="page-title"><p className="eyebrow">SESIÓN COMPLETADA</p><h1>{routineInfo[workout.routine.name]?.title || workout.routine.name}<em>.</em></h1><p className="muted">{formatDate(workout.started_at)}</p><div className="session-metrics"><span>{duration(workout)}</span><span>{workout.exercises.length} ejercicios</span><span>{workout.exercises.reduce((total,item)=>total+item.sets.length,0)} series</span></div></div>
     <ErrorNotice message={error} />
@@ -222,7 +231,7 @@ function WorkoutDetail({ workout, back, deleteWorkout, error }:{ workout:Workout
     <div className="session history-detail">{workout.exercises.map(item => <section className={'exercise-card '+(item.skipped ? 'skip' : '')} key={item.id}>
       <div className="exercise-heading"><span className="exercise-number">{String(item.position).padStart(2,'0')}</span><h2>{item.exercise_name_snapshot}</h2><span className="badge">{item.skipped ? 'Omitido' : item.sets.length+' series'}</span></div>
       {!item.skipped && (item.sets.length ? <WorkoutRows item={item} /> : <p className="muted">Sin series registradas.</p>)}
-    </section>)}</div><div className="danger-zone"><p>Este registro forma parte de tu historial.</p><button className="delete-workout" onClick={() => deleteWorkout(workout)}>Eliminar entrenamiento</button></div>
+    </section>)}</div><div className="danger-zone"><p>Este registro forma parte de tu historial.</p><button className="delete-workout" disabled={busy} onClick={() => deleteWorkout(workout)}>Eliminar entrenamiento</button></div>
   </main>
 }
 
@@ -273,6 +282,7 @@ function Session({ workout, history, refresh, finish, cancelWorkout, error, brow
   const orderedExercises=[...workout.exercises].sort((a,b)=>a.position-b.position)
   const selectedExercise=orderedExercises.find(item=>item.id===selectedExerciseId)||orderedExercises[0]
   const selectedIndex=selectedExercise?orderedExercises.findIndex(item=>item.id===selectedExercise.id):-1
+  const selectedRecords=useMemo(()=>recentExerciseRecords(history,selectedExercise?.exercise_id),[history,selectedExercise?.exercise_id])
   const [weights, setWeights] = useState<Record<number,string>>(draft.weights||{}), [weightTypes, setWeightTypes] = useState<Record<number,WeightType>>(draft.weightTypes||{}), [reps, setReps] = useState<Record<number,string>>(draft.repsById || (draft.reps && workout.exercises[0]?{[workout.exercises[0].id]:draft.reps}:{})), [warm, setWarm] = useState<Record<number,boolean>>(draft.warmsById || (draft.warm && workout.exercises[0]?{[workout.exercises[0].id]:true}:{})), [adding, setAdding] = useState(false), [catalog, setCatalog] = useState<Exercise[]>([]), [catalogError, setCatalogError] = useState('')
   const now=useWallClock()
   const loadCatalog = () => { setCatalogError(''); api('/exercises').then(setCatalog).catch((err:any)=>setCatalogError(err.message)) }
@@ -325,7 +335,7 @@ function Session({ workout, history, refresh, finish, cancelWorkout, error, brow
         <p className="exercise-step" role="status">Ejercicio {selectedIndex+1} de {orderedExercises.length}</p>
         <div className="exercise-switcher-controls"><button aria-label="Ejercicio anterior" disabled={locked||selectedIndex===0} onClick={()=>setSelectedExerciseId(orderedExercises[selectedIndex-1].id)}>←</button><label><span>Ejercicio actual</span><select aria-label="Ejercicio actual" value={selectedExercise.id} disabled={locked} onChange={event=>setSelectedExerciseId(Number(event.target.value))}>{orderedExercises.map(item=><option key={item.id} value={item.id}>{item.position}. {item.exercise_name_snapshot}{item.skipped?' · Omitido':''}</option>)}</select></label><button aria-label="Ejercicio siguiente" disabled={locked||selectedIndex===orderedExercises.length-1} onClick={()=>setSelectedExerciseId(orderedExercises[selectedIndex+1].id)}>→</button></div>
       </div>:<div className="empty-state session-empty"><h3>Empieza con un ejercicio</h3><p>Agrega uno para registrar tus series y consultar su historial.</p></div>}
-      <div className="session">{(selectedExercise?[selectedExercise]:[]).map(item=> { const records=recentExerciseRecords(history,item.exercise_id), type=typeFor(item); return <div className="exercise-group" key={item.id}><section className={'exercise-card '+(item.skipped ? 'skip' : '')}><fieldset className="exercise-fields" disabled={locked}>
+      <div className="session">{(selectedExercise?[selectedExercise]:[]).map(item=> { const records=selectedRecords, type=typeFor(item); return <div className="exercise-group" key={item.id}><section className={'exercise-card '+(item.skipped ? 'skip' : '')}><fieldset className="exercise-fields" disabled={locked}>
         <div className="exercise-heading"><span className="exercise-number">{String(item.position).padStart(2,'0')}</span><h2>{item.exercise_name_snapshot}</h2></div>
         <div className="exercise-toolbar"><span className="badge">{item.skipped ? 'Omitido' : item.sets.length+' series'}</span><div className="exercise-actions"><label className="exercise-order"><span>Orden</span><select aria-label="Posición del ejercicio" value={item.position} onChange={event=>move(item,Number(event.target.value))}>{orderedExercises.map((entry,index)=><option key={entry.id} value={index+1}>{index+1}</option>)}</select></label><button onClick={()=>toggle(item)}>{item.skipped ? 'Reanudar' : 'Saltar'}</button></div></div>
         {!item.skipped && <>
