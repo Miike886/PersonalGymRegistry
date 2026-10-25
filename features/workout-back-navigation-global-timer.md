@@ -22,6 +22,6 @@
 
 ## Entrega
 
-- Rama: `feature/workout-back-navigation-global-timer`, basada en `feature/exercise-recent-set-reference` (PR #23).
-- PR: [#24](https://github.com/Miike886/PersonalGymRegistry/pull/24), abierta y apilada sobre PR #23.
+- Rama: `feature/workout-back-navigation-global-timer`, basada en `feature/contextual-exercise-history` (PR #25).
+- PR: [#24](https://github.com/Miike886/PersonalGymRegistry/pull/24), abierta y apilada sobre PR #25.
 - Quality-gate: revisados título, descripción, cuatro archivos y diff contra su rama base; regreso contextual, privacidad, conservación de sesión y borradores, reloj basado en servidor y espacio móvil entre barras. Sin hallazgos bloqueantes. Checks backend, build y navegador pasaron en GitHub; sin cambios de datos, migraciones ni despliegue de producción.
