@@ -4,6 +4,8 @@
 
 La PR #21 llevó a `main` las entregas ya implementadas y verificadas que se habían integrado entre ramas de features. Fue una PR de integración, sin nuevas features ni cambios adicionales en el código de producto.
 
+Este documento conserva la auditoría de aquella integración. Para la base vigente tras las PR #22–#26, comprobaciones recientes y trabajo local sin integrar, consultar [salud del repositorio](repository-health.md).
+
 | PR original | Entrega |
 | --- | --- |
 | #12 | Cargas nuevas en libras y conservación de unidades históricas |

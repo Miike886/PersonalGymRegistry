@@ -29,6 +29,6 @@ Show factual, read-only history for the exercise currently being recorded so the
 
 ## Delivery
 
-- Original reference delivery: [#23](https://github.com/Miike886/PersonalGymRegistry/pull/23), merged into main.
-- Contextual layout follow-up branch: `feature/contextual-exercise-history`, targeting main.
-- Follow-up PR: [#25](https://github.com/Miike886/PersonalGymRegistry/pull/25), open. The same feature document is reused.
+- Original reference delivery: [#23](https://github.com/Miike886/PersonalGymRegistry/pull/23), merged into the bottom-navigation branch; integrated into `main` through #25.
+- Contextual layout follow-up branch: `feature/contextual-exercise-history`, integrated into `main`.
+- Follow-up PR: [#25](https://github.com/Miike886/PersonalGymRegistry/pull/25), merged into `main`. The same feature document is reused.

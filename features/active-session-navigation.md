@@ -22,4 +22,4 @@
 
 - No offline synchronization.
 - Branch: feature/active-session-navigation, base feature/pounds-load-units.
-- PR: [#13](https://github.com/Miike886/PersonalGymRegistry/pull/13), integrada en feature/pounds-load-units; pendiente de [integración a main](../docs/integration-main.md).
+- PR: [#13](https://github.com/Miike886/PersonalGymRegistry/pull/13), integrada en feature/pounds-load-units; integrada en `main` mediante [PR #21](../docs/integration-main.md).

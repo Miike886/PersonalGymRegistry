@@ -26,4 +26,4 @@ Make the app's main destinations easier to reach on mobile and bring completed w
 ## Delivery
 
 - Branch: `feature/bottom-tab-navigation-history-calendar-settings`.
-- Pull request: [#22](https://github.com/Miike886/PersonalGymRegistry/pull/22), open.
+- Pull request: [#22](https://github.com/Miike886/PersonalGymRegistry/pull/22), merged into `main`.

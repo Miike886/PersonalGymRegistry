@@ -18,13 +18,13 @@ Provide the first mobile-first vertical slice for recording personal gym session
 
 ## Limitations
 
-- No offline synchronization, authentication, statistics, charts, PRs, 1RM calculations, or supersets in V1.
-- The interface currently lists completed sessions; a richer historical session-detail view remains deferred.
+- This initial slice did not include authentication or charts; both have since shipped in separate features. Offline synchronization, PR/1RM calculations and supersets remain outside the delivered scope.
+- Historical session detail has since shipped; history now uses the attendance calendar. See [history detail](workout-history-detail.md) and [bottom navigation](bottom-tab-navigation.md).
 
 ## Verification
 
 - `cd backend && uv run pytest -q` passes.
-- Frontend build is pending local Node/npm availability.
+- Frontend build verified in the current repository health check; see [repository health](../docs/repository-health.md).
 
 ## Delivery
 

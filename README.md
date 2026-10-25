@@ -1,6 +1,6 @@
 # Gym Session Tracker
 
-Primer vertical slice móvil para registrar entrenamientos personales. La API es la fuente de verdad: una sesión activa persiste al cerrar la PWA hasta que se finaliza explícitamente.
+Aplicación móvil para registrar entrenamientos personales. La API es la fuente de verdad: una sesión activa persiste al cerrar la PWA hasta que se finaliza explícitamente.
 
 ## Inicio local
 
@@ -17,9 +17,14 @@ La interfaz queda disponible en `http://localhost:5173` y la documentación de l
 
 - Rutinas PUSH, PULL, LEGS y FREE con datos de ejemplo editables.
 - Una única sesión activa, protegida por validación de API y un índice parcial en PostgreSQL.
-- Copia histórica de ejercicios al iniciar una sesión, alta excepcional, omisión y reordenamiento mediante API.
-- Registro rápido de series, calentamiento, finalización explícita e historial básico.
+- Snapshots históricos, ejercicios por texto libre en FREE, omisión y reordenamiento por sesión.
+- Seguimiento de un ejercicio a la vez, borradores independientes, cargas en lb y referencia histórica contextual.
+- Registro y edición de series, calentamiento, descanso persistente de 2:45 y tiempo de sesión.
+- Navegación inferior durante la sesión, historial con calendario y gráficas de progreso.
+- Registro privado de la cuenta propietaria y login persistente.
 - Manifiesto PWA y diseño mobile-first.
+
+Consulta [ROADMAP.md](ROADMAP.md) para entregas y pendientes de producto, y [salud del repositorio](docs/repository-health.md) para verificaciones, trabajo local sin integrar y prioridades de mantenimiento. Ajustes sigue siendo un acceso sin opciones implementadas.
 
 > En una instalación nueva usa Alembic como fuente de esquema. `create_all` en el arranque existe solo para facilitar pruebas locales ligeras.
 

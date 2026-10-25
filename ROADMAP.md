@@ -1,8 +1,18 @@
-# Próximas features
+# Estado de features y pendientes
 
 Ideas detectadas durante el uso real. Cada feature se definirá y entregará en su propia rama y pull request.
 
 Las PR #12–#20 se integraron en `main` mediante la PR [#21](https://github.com/Miike886/PersonalGymRegistry/pull/21), fusionada el 22 de octubre de 2026. La activación y comprobación de producción se documentan por separado.
+
+Estado comprobado el 24 de octubre de 2026 (hora de México): las PR #22–#26 también están fusionadas; no hay PR abiertas. La prioridad actual es [mantener saludable el repositorio](docs/repository-health.md). Esto no implica que todo el trabajo local esté integrado: existe una rama de hardening pendiente de revisión.
+
+## Entregas recientes
+
+- [PR #22](https://github.com/Miike886/PersonalGymRegistry/pull/22): navegación inferior e historial con calendario. Ajustes conserva su placeholder.
+- [PR #23](https://github.com/Miike886/PersonalGymRegistry/pull/23): referencias por ejercicio, fusionada en la rama de navegación; llegó a `main` mediante #25.
+- [PR #24](https://github.com/Miike886/PersonalGymRegistry/pull/24): regreso al navegar y descanso global; llegó a `main` mediante #25.
+- [PR #25](https://github.com/Miike886/PersonalGymRegistry/pull/25): historial contextual debajo de cada ejercicio.
+- [PR #26](https://github.com/Miike886/PersonalGymRegistry/pull/26): seguimiento por ejercicio, selector, anterior/siguiente, reordenamiento y navegación inferior durante la sesión.
 
 ## Configuración de cuenta y aplicación
 
@@ -66,7 +76,7 @@ Las PR #12–#20 se integraron en `main` mediante la PR [#21](https://github.com
 
 ## Cargas en libras
 
-- Estado: implementada en PR #12 e integrada en `main` mediante PR #21. Aún no hay sesiones reales registradas, así que no hace falta reinterpretar cargas históricas.
+- Estado: implementada en PR #12 e integrada en `main` mediante PR #21. Los registros históricos conservan su unidad y valor; no se presupone el estado actual de la base de producción.
 - Usar lb por defecto, conforme al gimnasio del propietario.
 - Las sesiones futuras usan lb por defecto; no se convierten registros anteriores.
 - Detalle y criterios: [Cargas en libras](features/pounds-load-units.md).

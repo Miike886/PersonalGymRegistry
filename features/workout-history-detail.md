@@ -22,7 +22,7 @@ Allow completed gym sessions to be opened from history and reviewed without modi
 ## Verification
 
 - `cd backend && uv run pytest -q` passes (2 tests).
-- Frontend build is pending because Node/npm is unavailable in the local environment.
+- Frontend build verified in the current repository health check; see [repository health](../docs/repository-health.md).
 
 ## Delivery
 

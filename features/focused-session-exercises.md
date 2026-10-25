@@ -23,6 +23,6 @@
 
 ## Entrega
 
-- Rama: `feature/focused-session-exercises`, creada desde la entrega de historial contextual (PR #25), ya fusionada. Destino: main.
-- PR: [#26](https://github.com/Miike886/PersonalGymRegistry/pull/26), abierta.
-- Quality-gate: revisados título, descripción y ocho archivos del diff contra main; identidad del ejercicio seleccionado al reordenar, borradores por ID, navegación con sesión activa, orden persistido sin modificar plantilla, errores/reintentos, privacidad y espacio móvil. Sin hallazgos bloqueantes tras resolver el nombre accesible del selector. Checks remotos se comprueban al entregar.
+- Rama: `feature/focused-session-exercises`, creada desde la entrega de historial contextual (PR #25); integrada en `main`.
+- PR: [#26](https://github.com/Miike886/PersonalGymRegistry/pull/26), fusionada en `main`.
+- Quality-gate: revisados título, descripción y ocho archivos del diff contra main; identidad del ejercicio seleccionado al reordenar, borradores por ID, navegación con sesión activa, orden persistido sin modificar plantilla, errores/reintentos, privacidad y espacio móvil. Sin hallazgos bloqueantes tras resolver el nombre accesible del selector. Los tres jobs de Verify en `main` tras la fusión pasaron; ver [salud del repositorio](../docs/repository-health.md).
