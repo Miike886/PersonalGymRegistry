@@ -221,3 +221,20 @@ main{padding-bottom:112px}
 .exercise-history-row small{font-size:10px;color:#aebe84}
 .exercise-history-empty{margin:10px 0 0;font-size:12px;line-height:1.7}
 @media(max-width:360px){.exercise-history-reference{margin:0 8px;padding:12px}.exercise-history-row{padding:9px}.exercise-history-row b{font-size:13px}}
+.exercise-switcher{padding:16px;margin-bottom:18px;border:1px solid var(--border);border-radius:16px;background:#151b10}
+.exercise-step{margin:0 0 10px;color:var(--muted);font-size:12px;font-weight:600}
+.exercise-switcher-controls{display:grid;grid-template-columns:44px minmax(0,1fr) 44px;gap:10px;align-items:end}
+.exercise-switcher-controls>button{padding:10px 0;min-height:48px;font-size:20px}
+.exercise-switcher-controls>label{display:grid;gap:6px;min-width:0;color:var(--muted);font-size:11px}
+.exercise-switcher select,.exercise-order select{min-width:0;min-height:44px;padding:10px;border:1px solid var(--border);border-radius:10px;background:#0e140b;color:var(--lime)}
+.exercise-switcher select{width:100%;height:48px;font-size:14px;text-overflow:ellipsis}
+.exercise-order{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--muted)}
+.exercise-order select{width:64px;font-size:14px}
+.workout-page .session-title{margin:24px 0;gap:18px}
+.workout-page .session-title h1{font-size:clamp(38px,4vw,56px);margin-bottom:12px}
+.workout-page{padding-bottom:32px}
+.session-empty{padding:28px 18px}
+.session-empty h3{font-size:22px}
+.continuity-tools{padding-bottom:calc(96px + env(safe-area-inset-bottom))}
+@media(max-width:360px){.exercise-switcher{padding:12px}.exercise-switcher-controls{gap:6px}.exercise-switcher select{font-size:12px}.exercise-order{gap:5px}}
+@media(max-width:600px){.workout-page .header-actions{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.workout-page .header-actions button{font-size:12px;padding:10px;min-height:48px}.workout-page .session-title .eyebrow{margin-bottom:6px}}

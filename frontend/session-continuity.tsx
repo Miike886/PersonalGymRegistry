@@ -5,7 +5,7 @@ const prefix='gym:session-draft:'
 export function clearDrafts(id?:number) {
   try { for(const key of Object.keys(sessionStorage)) if(key.startsWith(prefix) && (id===undefined || key===prefix+id)) sessionStorage.removeItem(key) } catch {}
 }
-type Draft={weights?:Record<number,string>;weightTypes?:Record<number,'EXTERNAL'|'BODYWEIGHT'|'BODYWEIGHT_PLUS'|'BODYWEIGHT_ASSISTED'>;reps?:string;warm?:boolean;repsById?:Record<number,string>;warmsById?:Record<number,boolean>;customDraft?:{name:string;convention:'TOTAL'|'PER_HAND'}}
+type Draft={selectedExerciseId?:number;weights?:Record<number,string>;weightTypes?:Record<number,'EXTERNAL'|'BODYWEIGHT'|'BODYWEIGHT_PLUS'|'BODYWEIGHT_ASSISTED'>;reps?:string;warm?:boolean;repsById?:Record<number,string>;warmsById?:Record<number,boolean>;customDraft?:{name:string;convention:'TOTAL'|'PER_HAND'}}
 export function readDraft(id:number):Draft {
   try {
     const value=JSON.parse(sessionStorage.getItem(prefix+id)||'{}')
@@ -13,7 +13,7 @@ export function readDraft(id:number):Draft {
     const map=(input:unknown)=>input && typeof input==='object' && !Array.isArray(input)?Object.fromEntries(Object.entries(input).filter(([key,val])=>/^\d+$/.test(key) && typeof val==='string')):{}
     const types=Object.fromEntries(Object.entries(map(value.weightTypes)).filter(([,val])=>['EXTERNAL','BODYWEIGHT','BODYWEIGHT_PLUS','BODYWEIGHT_ASSISTED'].includes(val))) as Draft['weightTypes']
     const warms=(value.warmsById && typeof value.warmsById==='object'?Object.fromEntries(Object.entries(value.warmsById).filter(([key,val])=>/^\d+$/.test(key) && typeof val==='boolean')):{}) as Record<number,boolean>
-    return {weights:map(value.weights),weightTypes:types,reps:typeof value.reps==='string'?value.reps:'',warm:value.warm===true,repsById:value.repsById?map(value.repsById):undefined,warmsById:value.warmsById?warms:undefined,customDraft:{name:typeof value.customDraft?.name==='string'?value.customDraft.name:'',convention:value.customDraft?.convention==='PER_HAND'?'PER_HAND':'TOTAL'}}
+    return {selectedExerciseId:Number.isSafeInteger(value.selectedExerciseId)&&value.selectedExerciseId>0?value.selectedExerciseId:undefined,weights:map(value.weights),weightTypes:types,reps:typeof value.reps==='string'?value.reps:'',warm:value.warm===true,repsById:value.repsById?map(value.repsById):undefined,warmsById:value.warmsById?warms:undefined,customDraft:{name:typeof value.customDraft?.name==='string'?value.customDraft.name:'',convention:value.customDraft?.convention==='PER_HAND'?'PER_HAND':'TOTAL'}}
   } catch {return {}}
 }
 export function saveDraft(id:number,draft:unknown) {
