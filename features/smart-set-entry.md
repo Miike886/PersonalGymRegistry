@@ -2,20 +2,20 @@
 
 ## Purpose
 
-Reduce friction when recording a working set by suggesting the weight and weight type used in the last completed workout of the same routine.
+Show recent exercise data alongside set entry so the owner can make their own choice without a weight recommendation or automatic prefill.
 
 ## User-visible behavior
 
-- Each active exercise shows its last effective set as reference when available.
-- The suggested load and weight type are prefilled independently for each exercise.
-- Warm-up sets do not replace a working-set suggestion.
+- Each active exercise shows up to two recent working-set records as read-only reference data when available.
+- Previous exercise records are displayed as read-only facts; they do not prefill or recommend the current load or weight type.
+- Warm-up sets are excluded from the reference data.
 - The load control explains whether an exercise uses total weight or weight per hand.
 - Bodyweight sets can be selected without entering an external load.
 
 ## Implementation
 
 - Reuse the existing last-workout endpoint and exercise catalog; no schema change is required.
-- Keep the chosen weight and type in the active-session UI while recording consecutive sets.
+- Keep the owner's chosen weight and type in the active-session UI while recording consecutive sets.
 
 ## Limitations
 

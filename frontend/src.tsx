@@ -5,10 +5,12 @@ import {SetEditor,type EditDraft} from './set-editor'
 import { Progress } from './progress'
 import { AttendanceCalendar } from './attendance'
 import { clearDrafts, readDraft, saveDraft, useWallClock, FloatingTimer } from './session-continuity'
+import { recentExerciseRecords, type ExerciseRecordReference } from './recent-exercise-records'
+import { referenceSetLabel } from './set-label'
 
 const API = '/api'
 type WeightType = 'EXTERNAL'|'BODYWEIGHT'|'BODYWEIGHT_PLUS'|'BODYWEIGHT_ASSISTED'
-type WorkoutSet = { id:number; position:number; reps:number; load_value:number|null; load_unit:'kg'|'lb'; weight_type:WeightType; set_type:string }
+type WorkoutSet = { id:number; position:number; reps:number; load_value:number|null; load_unit:'kg'|'lb'; weight_type:WeightType; set_type:string; created_at:string }
 type WorkoutExercise = { id:number; exercise_id:number|null; exercise_name_snapshot:string; position:number; skipped:boolean; sets:WorkoutSet[] }
 type Workout = { id:number; routine_id:number; started_at:string; ended_at:string|null; rest_until:string|null; notes:string|null; routine:{name:string}; exercises:WorkoutExercise[] }
 type Exercise = { id:number; name:string; load_convention:'TOTAL'|'PER_HAND' }
@@ -32,7 +34,6 @@ function clock(seconds:number) { return [Math.floor(seconds/3600),Math.floor(sec
 function formatDate(date:string) { return new Intl.DateTimeFormat('es-MX', { weekday:'long', day:'numeric', month:'long', year:'numeric' }).format(new Date(timestamp(date))) }
 function duration(workout:Workout) { if (!workout.ended_at) return ''; const minutes = Math.max(0, Math.round((timestamp(workout.ended_at) - timestamp(workout.started_at)) / 60000)); return minutes >= 60 ? [`${Math.floor(minutes / 60)} h`, minutes % 60 ? `${minutes % 60} min` : ''].filter(Boolean).join(' ') : `${minutes} min` }
 function weightLabel(type:WeightType) { return ({ EXTERNAL:'Carga externa', BODYWEIGHT:'Peso corporal', BODYWEIGHT_PLUS:'Peso corporal + carga', BODYWEIGHT_ASSISTED:'Peso corporal asistido' })[type] }
-function referenceSetLabel(set:WorkoutSet) { if (set.weight_type === 'BODYWEIGHT') return `${set.reps}×peso corporal`; if (set.weight_type === 'BODYWEIGHT_PLUS') return `${set.reps}×peso corporal + ${set.load_value ?? 0} ${set.load_unit}`; if (set.weight_type === 'BODYWEIGHT_ASSISTED') return `${set.reps}×${set.load_value ?? 0} ${set.load_unit} de asistencia`; return `${set.reps}×${set.load_value ?? 'carga sin registrar'}${set.load_value != null ? ' '+set.load_unit : ''}` }
 
 const routineInfo:Record<string,{title:string; subtitle:string; number:string}> = {
   PUSH: { title:'Empuje', subtitle:'Pecho · hombros · tríceps', number:'01' },
@@ -136,6 +137,7 @@ function App() {
 
 function WorkoutApp({authVersion}:{authVersion:number}) {
   type AppView='home'|'history'|'detail'|'session'|'progress'|'settings'
+  const [returnView,setReturnView]=useState<Exclude<AppView,'session'>>('home')
   const [active, setActive] = useState<Workout|null>(null), [routines, setRoutines] = useState<any[]>([]), [history, setHistory] = useState<Workout[]>([]), [selected, setSelected] = useState<Workout|null>(null), [view, setView] = useState<AppView>('home'), [error, setError] = useState(''), [loadingDetail, setLoadingDetail] = useState(false)
   const [lifecycleBusy,setLifecycleBusy]=useState(false)
   const initialLoad = useRef(true),loadVersion=useRef(0),mutating=useRef(false)
@@ -158,7 +160,8 @@ function WorkoutApp({authVersion}:{authVersion:number}) {
     try{await action()}catch(err){failure=err instanceof Error?err.message:'No se pudo guardar el cambio'}
     finally{mutating.current=false;await load();setLifecycleBusy(false);if(failure)setError(failure)}
   }
-  const start = (routineId:number) => mutate(async()=>{setActive(await api('/workouts',{method:'POST',body:JSON.stringify({routine_id:routineId})}));setView('session')})
+  const start = (routineId:number) => mutate(async()=>{setActive(await api('/workouts',{method:'POST',body:JSON.stringify({routine_id:routineId})}));setReturnView('home');setView('session')})
+  const resumeSession=()=>{if(view!=='session'){setReturnView(view);setView('session')}}
   const finish = () => {if(active && confirm('¿Finalizar entrenamiento?'))mutate(async()=>{await api(`/workouts/${active.id}/finish`,{method:'POST'});clearDrafts(active.id);setActive(null);setView('history')})}
   const cancelWorkout = () => {if(active && confirm('¿Cancelar este entrenamiento? Se eliminarán todas las series registradas.'))mutate(async()=>{await api(`/workouts/${active.id}`,{method:'DELETE'});clearDrafts(active.id);setActive(null);setView('home')})}
   const deleteWorkout = async (workout:Workout) => { if (confirm('¿Eliminar este entrenamiento del historial? Esta acción no se puede deshacer.')) { try { setError(''); await api(`/workouts/${workout.id}`, { method:'DELETE' }); setSelected(null); setView('history'); await load() } catch (err:any) { setError(err.message) } } }
@@ -186,10 +189,17 @@ function WorkoutApp({authVersion}:{authVersion:number}) {
     <footer className="page-footer"><Brand /><span>UNA SERIE A LA VEZ.</span></footer>
   </main>}</div>
     {view!=='session'&&<BottomNavigation view={view} navigate={setView}/>}
-    {active && <div hidden={view!=='session'}><Session key={active.id} workout={active} lifecycleBusy={lifecycleBusy} refresh={load} finish={finish} cancelWorkout={cancelWorkout} error={error} browse={()=>setView('home')}/></div>}
+    {active && <div hidden={view!=='session'}><Session key={active.id} workout={active} history={history} lifecycleBusy={lifecycleBusy} refresh={load} finish={finish} cancelWorkout={cancelWorkout} error={error} browse={()=>setView(returnView)}/></div>}
     {active && <FloatingTimer workout={active}/>}
-    {active && view!=='session' && <button className="resume-session" onClick={()=>setView('session')}>● Retomar {active.routine.name} <span>Entrenamiento en curso ↗</span></button>}
+    {active && view!=='session' && <ActiveSessionBar workout={active} resume={resumeSession}/>}
   </>
+}
+
+function ActiveSessionBar({workout,resume}:{workout:Workout;resume:()=>void}) {
+  const now=useWallClock()
+  const rest=workout.rest_until?Math.max(0,Math.ceil((timestamp(workout.rest_until)-now)/1000)):0
+  const elapsed=Math.max(0,Math.floor((now-timestamp(workout.started_at))/1000))
+  return <button className="resume-session" onClick={resume}><span className="resume-label"><b>Retomar {workout.routine.name}</b><small>Entrenamiento en curso ↗</small></span><span className="session-bar-time"><small>{rest>0?'Descanso':'Tiempo de sesión'}</small><b role="timer" aria-label={rest>0?'Descanso pendiente':'Tiempo de sesión en navegación'}>{rest>0?`${Math.floor(rest/60)}:${String(rest%60).padStart(2,'0')}`:clock(elapsed)}</b></span></button>
 }
 
 function BottomNavigation({view,navigate}:{view:'home'|'history'|'detail'|'session'|'progress'|'settings';navigate:(view:'home'|'history'|'detail'|'session'|'progress'|'settings')=>void}) {
@@ -216,12 +226,13 @@ function WorkoutDetail({ workout, back, deleteWorkout, error }:{ workout:Workout
   </main>
 }
 
-function RecentWorkoutReference({ workouts, routineName, error, retry }:{ workouts:Workout[]; routineName:string; error:string; retry:() => void }) {
-  return <aside className="recent-reference"><p className="eyebrow">TU PUNTO DE PARTIDA</p><h2>La última vez<em>.</em></h2><p className="muted">Tus sesiones recientes de {routineName}. Cada carga muestra su unidad original; los registros anteriores no se convierten automáticamente.</p>
-    {error ? <div><ErrorNotice message={'No se pudo cargar la referencia: '+error} /><button onClick={retry}>Reintentar</button></div> : workouts.length ? workouts.map((entry,index) => <details key={entry.id} open={index === 0}>
-      <summary><span><small>{index === 0 ? 'MÁS RECIENTE' : 'SESIÓN ANTERIOR'}</small><b>{formatDate(entry.started_at)}</b></span><span className="expand-icon" aria-hidden="true">＋</span></summary><p className="reference-duration">{duration(entry)}</p>
-      <div className="recent-exercises">{entry.exercises.filter(item=>!item.skipped).map(item=> { const workingSets=item.sets.filter(set=>set.set_type==='WORKING'); return <div key={item.id}><b>{item.exercise_name_snapshot}</b><span>{workingSets.length ? workingSets.map(referenceSetLabel).join(' · ') : 'Sin series de trabajo'}</span></div> })}</div>
-    </details>) : <div className="reference-empty"><p>Aún no hay entrenamientos terminados de esta rutina.</p><small>Tu primera sesión será tu próxima referencia.</small></div>}
+function ExerciseHistory({name,records}:{name:string;records:ExerciseRecordReference[]}) {
+  return <aside className="exercise-history-reference" aria-label={'Historial de '+name}>
+    <div className="exercise-history-heading"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M3 11a9 9 0 1 1 2.6 7M3 4v7h7M12 7v5l3 2"/></svg><h3>Historial de este ejercicio</h3></div>
+    {records.length>0?<ol className="exercise-history-records">{records.map((record,index)=><li className="exercise-history-row" key={record.set.id}>
+      <span className="exercise-history-meta"><time dateTime={record.date}>{new Intl.DateTimeFormat('es-MX',{day:'numeric',month:'short',year:'numeric'}).format(new Date(timestamp(record.date)))}</time><span>Serie {record.set.position}</span></span>
+      <b>{referenceSetLabel(record.set)}</b><small>{index===0?'Último registro':'Registro anterior'}</small>
+    </li>)}</ol>:<p className="exercise-history-empty">Aún no hay registros de este ejercicio. Aquí verás tus últimas series al completar una sesión.</p>}
   </aside>
 }
 
@@ -256,15 +267,14 @@ function ExercisePicker({catalog,choose,custom,close,draft,setDraft}:{catalog:Ex
   </dialog>
 }
 
-function Session({ workout, refresh, finish, cancelWorkout, error, browse, lifecycleBusy }:{ workout:Workout; refresh:() => Promise<void>; finish:() => void; cancelWorkout:() => void; error:string; browse:()=>void; lifecycleBusy:boolean }) {
+function Session({ workout, history, refresh, finish, cancelWorkout, error, browse, lifecycleBusy }:{ workout:Workout; history:Workout[]; refresh:() => Promise<void>; finish:() => void; cancelWorkout:() => void; error:string; browse:()=>void; lifecycleBusy:boolean }) {
   const [draft]=useState(()=>readDraft(workout.id))
-  const [weights, setWeights] = useState<Record<number,string>>(draft.weights||{}), [weightTypes, setWeightTypes] = useState<Record<number,WeightType>>(draft.weightTypes||{}), [reps, setReps] = useState<Record<number,string>>(draft.repsById || (draft.reps && workout.exercises[0]?{[workout.exercises[0].id]:draft.reps}:{})), [warm, setWarm] = useState<Record<number,boolean>>(draft.warmsById || (draft.warm && workout.exercises[0]?{[workout.exercises[0].id]:true}:{})), [adding, setAdding] = useState(false), [catalog, setCatalog] = useState<Exercise[]>([]), [recent, setRecent] = useState<Workout[]>([]), [referenceError, setReferenceError] = useState('')
+  const [weights, setWeights] = useState<Record<number,string>>(draft.weights||{}), [weightTypes, setWeightTypes] = useState<Record<number,WeightType>>(draft.weightTypes||{}), [reps, setReps] = useState<Record<number,string>>(draft.repsById || (draft.reps && workout.exercises[0]?{[workout.exercises[0].id]:draft.reps}:{})), [warm, setWarm] = useState<Record<number,boolean>>(draft.warmsById || (draft.warm && workout.exercises[0]?{[workout.exercises[0].id]:true}:{})), [adding, setAdding] = useState(false), [catalog, setCatalog] = useState<Exercise[]>([]), [catalogError, setCatalogError] = useState('')
   const now=useWallClock()
-const loadReference = () => { setReferenceError(''); Promise.all([api(`/routines/${workout.routine_id}/recent-workouts?limit=2`), api('/exercises')]).then(([recentWorkouts, exercises]) => { setRecent(recentWorkouts); setCatalog(exercises); const previous = recentWorkouts[0], nextWeights:Record<number,string> = {}, nextTypes:Record<number,WeightType> = {}; workout.exercises.forEach(item => { const previousExercise = previous?.exercises.find((exercise:WorkoutExercise) => exercise.exercise_id === item.exercise_id); const suggestion = previousExercise?.sets.slice().reverse().find((set:WorkoutSet) => set.set_type === 'WORKING' && set.load_unit === 'lb'); if (suggestion) { if (suggestion.load_value != null) nextWeights[item.id] = String(suggestion.load_value); nextTypes[item.id] = suggestion.weight_type } }); setWeights(current => ({ ...nextWeights, ...current })); setWeightTypes(current => ({ ...nextTypes, ...current })) }).catch((err:any) => setReferenceError(err.message)) }
-  useEffect(() => { loadReference() }, [workout.id])
+  const loadCatalog = () => { setCatalogError(''); api('/exercises').then(setCatalog).catch((err:any)=>setCatalogError(err.message)) }
+  useEffect(() => { loadCatalog() }, [workout.id])
   const [customDraft,setCustomDraft]=useState<ExerciseDraft>(draft.customDraft||{name:'',convention:'TOTAL'})
   useEffect(()=>{saveDraft(workout.id,{weights,weightTypes,repsById:reps,warmsById:warm,customDraft})},[workout.id,weights,weightTypes,reps,warm,customDraft])
-  const reference = (item:WorkoutExercise) => { const found = recent[0]?.exercises.find(exercise => exercise.exercise_id === item.exercise_id); return found?.sets.slice().reverse().find(set => set.set_type === 'WORKING') }
   const exercise = (item:WorkoutExercise) => catalog.find(entry => entry.id === item.exercise_id)
   const convention = (item:WorkoutExercise) => exercise(item)?.load_convention === 'PER_HAND' ? 'lb por mano' : 'lb totales'
   const typeFor = (item:WorkoutExercise):WeightType => weightTypes[item.id] || 'EXTERNAL'
@@ -299,19 +309,18 @@ const loadReference = () => { setReferenceError(''); Promise.all([api(`/routines
   const skipRest = ()=>run(async()=>{await api(`/workouts/${workout.id}/rest/skip`,{method:'POST'});await refresh()})
 
   return <main className="workout-page">
-    <header className="topbar"><Brand /><div className="session-navigation"><span className="live-badge"><i /> SESIÓN EN CURSO</span><button onClick={browse}>Explorar app</button></div></header>
+    <header className="topbar workout-topbar"><div className="session-heading-navigation"><button className="session-back" onClick={browse} aria-label="Volver a la aplicación"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg><span>Volver</span></button><Brand /></div><span className="live-badge"><i /> SESIÓN EN CURSO</span></header>
     <div className="session-title"><div><p className="eyebrow">HOY TOCA</p><h1>{routineInfo[workout.routine.name]?.title || workout.routine.name}<em>.</em></h1><div className="session-metrics"><span role="timer" aria-label="Tiempo de sesión">{clock(elapsed)}</span><span>{workout.exercises.length} ejercicios</span><span>{workout.exercises.reduce((total,item)=>total+item.sets.length,0)} series registradas</span></div></div><div className="header-actions"><button disabled={locked} onClick={finish} className="primary">Finalizar sesión ↗</button><button disabled={locked} onClick={cancelWorkout} className="cancel-workout">Cancelar entrenamiento</button></div></div>
     <ErrorNotice message={error || actionError} />
     {editing && !editVisible && <button onClick={()=>setEditVisible(true)}>Continuar edición de serie</button>}
     {busy && <p role="status" className="muted">Guardando cambio…</p>}
     {seconds > 0 && <div className="rest-timer" role="timer" aria-label="Tiempo de descanso restante"><div><p className="eyebrow">RECUPERA EL AIRE</p><b>Tu siguiente serie te espera.</b></div><span className="rest-clock">{Math.floor(seconds/60)}:{String(seconds%60).padStart(2,'0')}</span><button disabled={locked} onClick={skipRest}>Omitir descanso</button><div className="rest-track" aria-hidden="true"><span style={{width:(seconds/165*100)+'%'}} /></div></div>}
-    <div className="workout-layout"><div className="workout-content">
+    <div className="workout-content">
       <div className="section-heading"><h2>Tu entrenamiento</h2><span className="eyebrow">{workout.routine.name}</span></div>
-      <div className="session">{workout.exercises.map(item=> { const ref=reference(item), type=typeFor(item); return <section className={'exercise-card '+(item.skipped ? 'skip' : '')} key={item.id}><fieldset className="exercise-fields" disabled={locked}>
+      <div className="session">{workout.exercises.map(item=> { const records=recentExerciseRecords(history,item.exercise_id), type=typeFor(item); return <div className="exercise-group" key={item.id}><section className={'exercise-card '+(item.skipped ? 'skip' : '')}><fieldset className="exercise-fields" disabled={locked}>
         <div className="exercise-heading"><span className="exercise-number">{String(item.position).padStart(2,'0')}</span><h2>{item.exercise_name_snapshot}</h2></div>
         <div className="exercise-toolbar"><span className="badge">{item.skipped ? 'Omitido' : item.sets.length+' series'}</span><div className="exercise-actions"><button aria-label={'Mover arriba: '+item.exercise_name_snapshot} onClick={()=>move(item,-1)} disabled={item.position===1}>↑</button><button aria-label={'Mover abajo: '+item.exercise_name_snapshot} onClick={()=>move(item,1)} disabled={item.position===workout.exercises.length}>↓</button><button onClick={()=>toggle(item)}>{item.skipped ? 'Reanudar' : 'Saltar'}</button></div></div>
         {!item.skipped && <>
-          {ref && <div className="previous-set"><span>ÚLTIMA VEZ</span><b>{referenceSetLabel(ref)}</b></div>}
           <div className="sets">{item.sets.map(set=><div className="set-row" key={set.id}><span className="set-number">{String(set.position).padStart(2,'0')}</span><span className="set-value">{referenceSetLabel(set)}<small>{set.set_type==='WARMUP' ? 'Calentamiento' : 'Trabajo'}</small></span><div className="set-actions"><button aria-label={'Editar serie '+set.position+' de '+item.exercise_name_snapshot} onClick={()=>editSet(set)}>Editar</button><button className="icon-danger" aria-label={'Eliminar serie '+set.position+' de '+item.exercise_name_snapshot} onClick={()=>deleteSet(set)}>×</button></div></div>)}</div>
           <div className="quick">
             <label className="field weight-type"><span>Tipo de carga</span><select value={type} onChange={event=>setWeightTypes({...weightTypes,[item.id]:event.target.value as WeightType})}>{(['EXTERNAL','BODYWEIGHT','BODYWEIGHT_PLUS','BODYWEIGHT_ASSISTED'] as WeightType[]).map(option=><option key={option} value={option}>{weightLabel(option)}</option>)}</select><small>{weightLabel(type)}</small></label>
@@ -320,9 +329,10 @@ const loadReference = () => { setReferenceError(''); Promise.all([api(`/routines
           </div>
           <div className="record-row"><label className="checkbox-label"><input type="checkbox" checked={warm[item.id]||false} onChange={event=>setWarm({...warm,[item.id]:event.target.checked})} />Calentamiento</label><button className="record" disabled={locked || !reps[item.id]} onClick={()=>add(item)}>＋ Registrar serie</button></div>
         </>}
-      </fieldset></section> })}</div>
+      </fieldset></section>{!item.skipped&&<ExerciseHistory name={item.exercise_name_snapshot} records={records}/>}</div> })}</div>
+      {catalogError&&<div className="catalog-error"><ErrorNotice message={'No se pudo cargar el catálogo: '+catalogError}/><button onClick={loadCatalog}>Reintentar catálogo</button></div>}
       <button disabled={locked} className="add" onClick={()=>setAdding(true)} aria-haspopup="dialog">＋ Agregar o sustituir ejercicio</button>
-    </div><RecentWorkoutReference workouts={recent} routineName={workout.routine.name} error={referenceError} retry={loadReference} /></div>
+    </div>
     {editing && editVisible && <SetEditor draft={editing} change={setEditing} save={saveSet} close={()=>{setEditing(null);setEditVisible(false)}} suspend={()=>setEditVisible(false)}/>}
     {adding && <ExercisePicker catalog={catalog} choose={addExercise} custom={workout.routine.name==='FREE'?addCustomExercise:undefined} draft={customDraft} setDraft={setCustomDraft} close={()=>setAdding(false)} />}
   </main>
