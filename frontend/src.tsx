@@ -6,6 +6,7 @@ import { Progress } from './progress'
 import { AttendanceCalendar } from './attendance'
 import { clearDrafts, readDraft, saveDraft, useWallClock, FloatingTimer } from './session-continuity'
 import { recentExerciseRecords, type ExerciseRecordReference } from './recent-exercise-records'
+import { referenceSetLabel } from './set-label'
 
 const API = '/api'
 type WeightType = 'EXTERNAL'|'BODYWEIGHT'|'BODYWEIGHT_PLUS'|'BODYWEIGHT_ASSISTED'
@@ -33,7 +34,6 @@ function clock(seconds:number) { return [Math.floor(seconds/3600),Math.floor(sec
 function formatDate(date:string) { return new Intl.DateTimeFormat('es-MX', { weekday:'long', day:'numeric', month:'long', year:'numeric' }).format(new Date(timestamp(date))) }
 function duration(workout:Workout) { if (!workout.ended_at) return ''; const minutes = Math.max(0, Math.round((timestamp(workout.ended_at) - timestamp(workout.started_at)) / 60000)); return minutes >= 60 ? [`${Math.floor(minutes / 60)} h`, minutes % 60 ? `${minutes % 60} min` : ''].filter(Boolean).join(' ') : `${minutes} min` }
 function weightLabel(type:WeightType) { return ({ EXTERNAL:'Carga externa', BODYWEIGHT:'Peso corporal', BODYWEIGHT_PLUS:'Peso corporal + carga', BODYWEIGHT_ASSISTED:'Peso corporal asistido' })[type] }
-function referenceSetLabel(set:WorkoutSet) { if (set.weight_type === 'BODYWEIGHT') return `${set.reps}×peso corporal`; if (set.weight_type === 'BODYWEIGHT_PLUS') return `${set.reps}×peso corporal + ${set.load_value ?? 0} ${set.load_unit}`; if (set.weight_type === 'BODYWEIGHT_ASSISTED') return `${set.reps}×${set.load_value ?? 0} ${set.load_unit} de asistencia`; return `${set.reps}×${set.load_value ?? 'carga sin registrar'}${set.load_value != null ? ' '+set.load_unit : ''}` }
 
 const routineInfo:Record<string,{title:string; subtitle:string; number:string}> = {
   PUSH: { title:'Empuje', subtitle:'Pecho · hombros · tríceps', number:'01' },
