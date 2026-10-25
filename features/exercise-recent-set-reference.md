@@ -25,6 +25,7 @@ Show factual, read-only history for the exercise currently being recorded so the
 - `npm run build` passes TypeScript and creates the production PWA bundle.
 - `node scripts/test-owner-auth.mjs` checks populated and empty panels directly below their cards using isolated synthetic history, exercise isolation, responsive layout and unchanged typed inputs.
 - `git diff --check` passes.
+- Quality-gate reviewed the PR title, description and diff against main, exercise isolation, completed/working-only history, empty states and responsive placement. Missing assisted/additional loads retain an explicit unknown label rather than becoming zero. No remaining blocking findings; the final CI result is checked at handoff.
 
 ## Delivery
 
