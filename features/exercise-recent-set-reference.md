@@ -6,14 +6,16 @@ Show factual, read-only history for the exercise currently being recorded so the
 
 ## User-visible behavior
 
-- Each exercise card shows up to its two most recent working-set records from completed workouts, with session date, repetitions, recorded load/type and original unit.
+- Immediately below each exercise card, an attached history panel shows up to its two most recent working-set records from completed workouts, with session date, set position, repetitions, recorded load/type and original unit. The records stay expanded and visible.
 - Warm-up sets and the current active workout are excluded. Zero, bodyweight, assisted, missing-load, kg and lb records retain their recorded meaning.
-- The reference never fills or changes the current set inputs. If no prior record exists, the form remains unchanged.
+- The reference never fills or changes the current set inputs. Without prior data, the panel explains that records will appear after completing a session; it never displays invented samples.
 - Keep the presentation compact and visually secondary to the current set form.
+- Remove the routine-wide reference at the end of the page. Each panel contains only its own exercise, across completed routines. Skipped exercise cards omit the panel until resumed.
 
 ## Implementation and limitations
 
 - Derive from the already loaded owner-authenticated workout history; no API, database, or migration changes.
+- The session no longer requests routine-wide recent workouts. Catalog loading retains its own visible error and retry action.
 - Match records by canonical exercise id. Legacy free-text snapshots without an exercise id cannot be matched to a catalog exercise.
 - Only completed workout history is shown; working sets in the current active session are not treated as history.
 
@@ -21,7 +23,7 @@ Show factual, read-only history for the exercise currently being recorded so the
 
 - `npm test` passes model checks for ordering, completed-session filtering, warm-up exclusion, original units and absent exercises.
 - `npm run build` passes TypeScript and creates the production PWA bundle.
-- `node scripts/test-owner-auth.mjs` passes the authenticated browser flow and checks that the reference leaves the weight field empty until the owner enters a value.
+- `node scripts/test-owner-auth.mjs` checks populated and empty panels directly below their cards using isolated synthetic history, exercise isolation, responsive layout and unchanged typed inputs.
 - `git diff --check` passes.
 
 ## Delivery
