@@ -17,7 +17,7 @@ Show the user's most relevant recent loads during an active workout without requ
 
 - `GET /routines/{routine_id}/recent-workouts` returns completed workouts for one routine, newest first.
 - The endpoint defaults to two results and accepts a validated `limit` from 1 to 10.
-- The active session reuses the newest returned workout for existing load suggestions.
+- The active session shows these workouts as read-only references and never uses them to prefill set inputs.
 - No database migration is required.
 
 ## Limitations

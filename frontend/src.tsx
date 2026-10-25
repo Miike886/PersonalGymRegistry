@@ -5,10 +5,11 @@ import {SetEditor,type EditDraft} from './set-editor'
 import { Progress } from './progress'
 import { AttendanceCalendar } from './attendance'
 import { clearDrafts, readDraft, saveDraft, useWallClock, FloatingTimer } from './session-continuity'
+import { recentExerciseRecords } from './recent-exercise-records'
 
 const API = '/api'
 type WeightType = 'EXTERNAL'|'BODYWEIGHT'|'BODYWEIGHT_PLUS'|'BODYWEIGHT_ASSISTED'
-type WorkoutSet = { id:number; position:number; reps:number; load_value:number|null; load_unit:'kg'|'lb'; weight_type:WeightType; set_type:string }
+type WorkoutSet = { id:number; position:number; reps:number; load_value:number|null; load_unit:'kg'|'lb'; weight_type:WeightType; set_type:string; created_at:string }
 type WorkoutExercise = { id:number; exercise_id:number|null; exercise_name_snapshot:string; position:number; skipped:boolean; sets:WorkoutSet[] }
 type Workout = { id:number; routine_id:number; started_at:string; ended_at:string|null; rest_until:string|null; notes:string|null; routine:{name:string}; exercises:WorkoutExercise[] }
 type Exercise = { id:number; name:string; load_convention:'TOTAL'|'PER_HAND' }
@@ -186,7 +187,7 @@ function WorkoutApp({authVersion}:{authVersion:number}) {
     <footer className="page-footer"><Brand /><span>UNA SERIE A LA VEZ.</span></footer>
   </main>}</div>
     {view!=='session'&&<BottomNavigation view={view} navigate={setView}/>}
-    {active && <div hidden={view!=='session'}><Session key={active.id} workout={active} lifecycleBusy={lifecycleBusy} refresh={load} finish={finish} cancelWorkout={cancelWorkout} error={error} browse={()=>setView('home')}/></div>}
+    {active && <div hidden={view!=='session'}><Session key={active.id} workout={active} history={history} lifecycleBusy={lifecycleBusy} refresh={load} finish={finish} cancelWorkout={cancelWorkout} error={error} browse={()=>setView('home')}/></div>}
     {active && <FloatingTimer workout={active}/>}
     {active && view!=='session' && <button className="resume-session" onClick={()=>setView('session')}>● Retomar {active.routine.name} <span>Entrenamiento en curso ↗</span></button>}
   </>
@@ -256,15 +257,14 @@ function ExercisePicker({catalog,choose,custom,close,draft,setDraft}:{catalog:Ex
   </dialog>
 }
 
-function Session({ workout, refresh, finish, cancelWorkout, error, browse, lifecycleBusy }:{ workout:Workout; refresh:() => Promise<void>; finish:() => void; cancelWorkout:() => void; error:string; browse:()=>void; lifecycleBusy:boolean }) {
+function Session({ workout, history, refresh, finish, cancelWorkout, error, browse, lifecycleBusy }:{ workout:Workout; history:Workout[]; refresh:() => Promise<void>; finish:() => void; cancelWorkout:() => void; error:string; browse:()=>void; lifecycleBusy:boolean }) {
   const [draft]=useState(()=>readDraft(workout.id))
   const [weights, setWeights] = useState<Record<number,string>>(draft.weights||{}), [weightTypes, setWeightTypes] = useState<Record<number,WeightType>>(draft.weightTypes||{}), [reps, setReps] = useState<Record<number,string>>(draft.repsById || (draft.reps && workout.exercises[0]?{[workout.exercises[0].id]:draft.reps}:{})), [warm, setWarm] = useState<Record<number,boolean>>(draft.warmsById || (draft.warm && workout.exercises[0]?{[workout.exercises[0].id]:true}:{})), [adding, setAdding] = useState(false), [catalog, setCatalog] = useState<Exercise[]>([]), [recent, setRecent] = useState<Workout[]>([]), [referenceError, setReferenceError] = useState('')
   const now=useWallClock()
-const loadReference = () => { setReferenceError(''); Promise.all([api(`/routines/${workout.routine_id}/recent-workouts?limit=2`), api('/exercises')]).then(([recentWorkouts, exercises]) => { setRecent(recentWorkouts); setCatalog(exercises); const previous = recentWorkouts[0], nextWeights:Record<number,string> = {}, nextTypes:Record<number,WeightType> = {}; workout.exercises.forEach(item => { const previousExercise = previous?.exercises.find((exercise:WorkoutExercise) => exercise.exercise_id === item.exercise_id); const suggestion = previousExercise?.sets.slice().reverse().find((set:WorkoutSet) => set.set_type === 'WORKING' && set.load_unit === 'lb'); if (suggestion) { if (suggestion.load_value != null) nextWeights[item.id] = String(suggestion.load_value); nextTypes[item.id] = suggestion.weight_type } }); setWeights(current => ({ ...nextWeights, ...current })); setWeightTypes(current => ({ ...nextTypes, ...current })) }).catch((err:any) => setReferenceError(err.message)) }
+const loadReference = () => { setReferenceError(''); Promise.all([api(`/routines/${workout.routine_id}/recent-workouts?limit=2`), api('/exercises')]).then(([recentWorkouts, exercises]) => { setRecent(recentWorkouts); setCatalog(exercises) }).catch((err:any) => setReferenceError(err.message)) }
   useEffect(() => { loadReference() }, [workout.id])
   const [customDraft,setCustomDraft]=useState<ExerciseDraft>(draft.customDraft||{name:'',convention:'TOTAL'})
   useEffect(()=>{saveDraft(workout.id,{weights,weightTypes,repsById:reps,warmsById:warm,customDraft})},[workout.id,weights,weightTypes,reps,warm,customDraft])
-  const reference = (item:WorkoutExercise) => { const found = recent[0]?.exercises.find(exercise => exercise.exercise_id === item.exercise_id); return found?.sets.slice().reverse().find(set => set.set_type === 'WORKING') }
   const exercise = (item:WorkoutExercise) => catalog.find(entry => entry.id === item.exercise_id)
   const convention = (item:WorkoutExercise) => exercise(item)?.load_convention === 'PER_HAND' ? 'lb por mano' : 'lb totales'
   const typeFor = (item:WorkoutExercise):WeightType => weightTypes[item.id] || 'EXTERNAL'
@@ -307,11 +307,11 @@ const loadReference = () => { setReferenceError(''); Promise.all([api(`/routines
     {seconds > 0 && <div className="rest-timer" role="timer" aria-label="Tiempo de descanso restante"><div><p className="eyebrow">RECUPERA EL AIRE</p><b>Tu siguiente serie te espera.</b></div><span className="rest-clock">{Math.floor(seconds/60)}:{String(seconds%60).padStart(2,'0')}</span><button disabled={locked} onClick={skipRest}>Omitir descanso</button><div className="rest-track" aria-hidden="true"><span style={{width:(seconds/165*100)+'%'}} /></div></div>}
     <div className="workout-layout"><div className="workout-content">
       <div className="section-heading"><h2>Tu entrenamiento</h2><span className="eyebrow">{workout.routine.name}</span></div>
-      <div className="session">{workout.exercises.map(item=> { const ref=reference(item), type=typeFor(item); return <section className={'exercise-card '+(item.skipped ? 'skip' : '')} key={item.id}><fieldset className="exercise-fields" disabled={locked}>
+      <div className="session">{workout.exercises.map(item=> { const records=recentExerciseRecords(history,item.exercise_id), type=typeFor(item); return <section className={'exercise-card '+(item.skipped ? 'skip' : '')} key={item.id}><fieldset className="exercise-fields" disabled={locked}>
         <div className="exercise-heading"><span className="exercise-number">{String(item.position).padStart(2,'0')}</span><h2>{item.exercise_name_snapshot}</h2></div>
         <div className="exercise-toolbar"><span className="badge">{item.skipped ? 'Omitido' : item.sets.length+' series'}</span><div className="exercise-actions"><button aria-label={'Mover arriba: '+item.exercise_name_snapshot} onClick={()=>move(item,-1)} disabled={item.position===1}>↑</button><button aria-label={'Mover abajo: '+item.exercise_name_snapshot} onClick={()=>move(item,1)} disabled={item.position===workout.exercises.length}>↓</button><button onClick={()=>toggle(item)}>{item.skipped ? 'Reanudar' : 'Saltar'}</button></div></div>
         {!item.skipped && <>
-          {ref && <div className="previous-set"><span>ÚLTIMA VEZ</span><b>{referenceSetLabel(ref)}</b></div>}
+          {records.length>0&&<div className="exercise-history-reference" aria-label={'Registros anteriores de '+item.exercise_name_snapshot}><span className="exercise-history-label">REGISTROS ANTERIORES</span>{records.map(record=><div className="exercise-history-row" key={record.set.id}><time dateTime={record.date}>{new Intl.DateTimeFormat('es-MX',{day:'numeric',month:'short',year:'numeric'}).format(new Date(timestamp(record.date)))}</time><b>{referenceSetLabel(record.set)}</b></div>)}</div>}
           <div className="sets">{item.sets.map(set=><div className="set-row" key={set.id}><span className="set-number">{String(set.position).padStart(2,'0')}</span><span className="set-value">{referenceSetLabel(set)}<small>{set.set_type==='WARMUP' ? 'Calentamiento' : 'Trabajo'}</small></span><div className="set-actions"><button aria-label={'Editar serie '+set.position+' de '+item.exercise_name_snapshot} onClick={()=>editSet(set)}>Editar</button><button className="icon-danger" aria-label={'Eliminar serie '+set.position+' de '+item.exercise_name_snapshot} onClick={()=>deleteSet(set)}>×</button></div></div>)}</div>
           <div className="quick">
             <label className="field weight-type"><span>Tipo de carga</span><select value={type} onChange={event=>setWeightTypes({...weightTypes,[item.id]:event.target.value as WeightType})}>{(['EXTERNAL','BODYWEIGHT','BODYWEIGHT_PLUS','BODYWEIGHT_ASSISTED'] as WeightType[]).map(option=><option key={option} value={option}>{weightLabel(option)}</option>)}</select><small>{weightLabel(type)}</small></label>
