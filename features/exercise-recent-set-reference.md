@@ -37,4 +37,4 @@ Show factual, read-only history for the exercise currently being recorded so the
 - Original reference delivery: [#23](https://github.com/Miike886/PersonalGymRegistry/pull/23), merged into the bottom-navigation branch; integrated into `main` through #25.
 - Contextual layout follow-up branch: `feature/contextual-exercise-history`, integrated into `main`.
 - Follow-up PR: [#25](https://github.com/Miike886/PersonalGymRegistry/pull/25), merged into `main`. The same feature document is reused.
-- First-working-set correction branch: `feature/first-working-set-reference`; [#27](https://github.com/Miike886/PersonalGymRegistry/pull/27), open. Includes model and browser regressions for the first two working sets.
+- First-working-set correction: [#27](https://github.com/Miike886/PersonalGymRegistry/pull/27), merged into `main` as `7f481f4` after all CI checks passed, including dependency audits, PostgreSQL concurrency and the owner browser flow. Branch: `feature/first-working-set-reference`. Production deploys automatically from `main` through the existing Vercel integration.
