@@ -238,9 +238,9 @@ function WorkoutDetail({ workout, back, deleteWorkout, error, busy }:{ workout:W
 function ExerciseHistory({name,records}:{name:string;records:ExerciseRecordReference[]}) {
   return <aside className="exercise-history-reference" aria-label={'Historial de '+name}>
     <div className="exercise-history-heading"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M3 11a9 9 0 1 1 2.6 7M3 4v7h7M12 7v5l3 2"/></svg><h3>Historial de este ejercicio</h3></div>
-    {records.length>0?<ol className="exercise-history-records">{records.map((record,index)=><li className="exercise-history-row" key={record.set.id}>
+    {records.length>0?<ol className="exercise-history-records">{records.map(record=><li className="exercise-history-row" key={record.set.id}>
       <span className="exercise-history-meta"><time dateTime={record.date}>{new Intl.DateTimeFormat('es-MX',{day:'numeric',month:'short',year:'numeric'}).format(new Date(timestamp(record.date)))}</time><span>Serie {record.set.position}</span></span>
-      <b>{referenceSetLabel(record.set)}</b><small>{index===0?'Último registro':'Registro anterior'}</small>
+      <b>{referenceSetLabel(record.set)}</b><small>Serie efectiva</small>
     </li>)}</ol>:<p className="exercise-history-empty">Aún no hay registros de este ejercicio. Aquí verás tus últimas series al completar una sesión.</p>}
   </aside>
 }
