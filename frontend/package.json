@@ -1,1 +1,29 @@
-{"type":"module","scripts":{"dev":"vite","build":"tsc -b && vite build","test":"node scripts/test-feature-models.mjs","preview":"vite preview"},"dependencies":{"react":"latest","react-dom":"latest"},"devDependencies":{"@types/react":"latest","@types/react-dom":"latest","@vitejs/plugin-react":"latest","playwright":"^1.64.1","typescript":"latest","vite":"latest","vite-plugin-pwa":"latest"}}
+{
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "test": "node scripts/test-feature-models.mjs",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "react": "latest",
+    "react-dom": "latest"
+  },
+  "devDependencies": {
+    "@types/react": "latest",
+    "@types/react-dom": "latest",
+    "@vitejs/plugin-react": "latest",
+    "playwright": "^1.64.1",
+    "typescript": "latest",
+    "vite": "latest",
+    "vite-plugin-pwa": "latest"
+  },
+  "overrides": {
+    "deepmerge": "4.1.1",
+    "workbox-build": {
+      "glob": "14.0.3",
+      "@trickfilm400/rollup-plugin-off-main-thread": "4.0.0"
+    }
+  }
+}

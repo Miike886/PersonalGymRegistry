@@ -19,6 +19,7 @@ Show factual, read-only history for the exercise currently being recorded so the
 - Match records by canonical exercise id. Legacy free-text snapshots without an exercise id cannot be matched to a catalog exercise.
 - Only completed workout history is shown; working sets in the current active session are not treated as history.
 - Reference records for the selected exercise are memoized by history and canonical exercise ID, so timer ticks do not re-sort the full history.
+- Delivery resolves the dependency-audit blocker in PWA build tooling: the lock uses vite-plugin-pwa 2.0.0, and scoped overrides select glob 14.0.3, off-main-thread plugin 4.0.0 and deepmerge 4.1.1 (outside the affected 4.2.0–4.3.1 range). Revisit the overrides when upstream dependencies adopt fixes; no runtime API or database changes.
 
 ## Verification
 
@@ -27,6 +28,8 @@ Show factual, read-only history for the exercise currently being recorded so the
 - `node scripts/test-owner-auth.mjs` checks populated and empty panels directly below their cards using isolated synthetic history, exercise isolation, responsive layout and unchanged typed inputs.
 - With three historical working sets, the browser regression checks that positions 1 and 2 appear at widths 320, 375, 768 and 1440; the 375px screenshot was visually checked.
 - `git diff --check` passes.
+- Backend verification: `uv run pytest -q` passes (64 tests). `npm audit --package-lock-only --audit-level=low` passes with zero vulnerabilities; production build and browser flow pass with the updated tooling.
+- Quality-gate for #27 reviewed its title, description, diff against main, first-working-set ordering, units and read-only behavior. The dependency-audit blocker is resolved by the tooling overrides above. Legacy snapshots without a canonical exercise ID remain unmatched; production verification does not create or edit owner workout data.
 - Quality-gate reviewed the PR title, description and diff against main, exercise isolation, completed/working-only history, empty states and responsive placement. Missing assisted/additional loads retain an explicit unknown label rather than becoming zero. No remaining blocking findings; the final CI result is checked at handoff.
 
 ## Delivery
@@ -34,4 +37,4 @@ Show factual, read-only history for the exercise currently being recorded so the
 - Original reference delivery: [#23](https://github.com/Miike886/PersonalGymRegistry/pull/23), merged into the bottom-navigation branch; integrated into `main` through #25.
 - Contextual layout follow-up branch: `feature/contextual-exercise-history`, integrated into `main`.
 - Follow-up PR: [#25](https://github.com/Miike886/PersonalGymRegistry/pull/25), merged into `main`. The same feature document is reused.
-- First-working-set correction branch: `feature/first-working-set-reference`; PR pending creation. Includes model and browser regressions for the first two working sets.
+- First-working-set correction branch: `feature/first-working-set-reference`; [#27](https://github.com/Miike886/PersonalGymRegistry/pull/27), open. Includes model and browser regressions for the first two working sets.
