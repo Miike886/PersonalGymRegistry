@@ -10,6 +10,6 @@ export function recentExerciseRecords(workouts:HistoricalWorkout[],exerciseId:nu
   return workouts.filter(workout=>workout.ended_at!==null).flatMap(workout=>workout.exercises
     .filter(exercise=>exercise.exercise_id===exerciseId)
     .flatMap(exercise=>exercise.sets.filter(set=>set.set_type==='WORKING').map(set=>({workout_id:workout.id,date:workout.started_at,set}))))
-    .sort((a,b)=>timestamp(b.set.created_at)-timestamp(a.set.created_at)||timestamp(b.date)-timestamp(a.date)||b.workout_id-a.workout_id||b.set.position-a.set.position)
+    .sort((a,b)=>timestamp(b.date)-timestamp(a.date)||b.workout_id-a.workout_id||a.set.position-b.set.position||a.set.id-b.set.id)
     .slice(0,Math.max(0,limit))
 }
