@@ -60,6 +60,6 @@ export function FloatingTimer({workout}:{workout:{started_at:string;rest_until:s
       {supported?<button onClick={open}>↗ Temporizador en ventana flotante</button>:<small>El tiempo se conserva al cambiar de aplicación. Este navegador no permite superponer este reloj fuera de la app.</small>}
       {error && <p role="alert">{error}</p>}
     </aside>
-    {popup && createPortal(<section aria-label="Temporizador flotante"><small>{workout.routine.name} · {rest?'DESCANSO':'TIEMPO DE SESIÓN'}</small><strong role="timer">{clock(rest || Math.max(0,Math.floor((now-time(workout.started_at))/1000)))}</strong><p>{rest?'Tu próxima serie te espera.':'Vuelve a la app para registrar tu siguiente serie.'}</p><button onClick={()=>popup.close()}>Cerrar ventana</button></section>,popup.document.body)}
+    {popup && createPortal(<section aria-label="Temporizador flotante"><small>{workout.routine.name} · {rest?'DESCANSO':'TIEMPO DE SESIÓN'}</small><strong role="timer">{clock(rest || Math.max(0,Math.floor((now-time(workout.started_at))/1000)))}</strong><button onClick={()=>popup.close()}>Cerrar ventana</button></section>,popup.document.body)}
   </>
 }
