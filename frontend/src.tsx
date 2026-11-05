@@ -38,8 +38,8 @@ function weightLabel(type:WeightType) { return ({ EXTERNAL:'Carga externa', BODY
 const routineInfo:Record<string,{title:string; subtitle:string; number:string}> = {
   PUSH: { title:'Empuje', subtitle:'Pecho · hombros · tríceps', number:'01' },
   PULL: { title:'Tracción', subtitle:'Espalda · bíceps', number:'02' },
-  LEGS: { title:'Pierna', subtitle:'Fuerza desde la base', number:'03' },
-  FREE: { title:'Libre', subtitle:'Tu sesión, a tu ritmo', number:'04' },
+  LEGS: { title:'Pierna', subtitle:'Tren inferior', number:'03' },
+  FREE: { title:'Libre', subtitle:'Sin ejercicios predefinidos', number:'04' },
 }
 function Brand() {
   return <div className="brand"><span className="brand-mark" aria-hidden="true">///</span><span>GYM<span className="brand-light">TRACKER</span></span></div>
@@ -80,8 +80,8 @@ function Login({done, notice, retry}:{done:(owner:{username:string})=>void;notic
     finally { setBusy(false) }
   }
   return <main className="login-page"><header className="topbar"><Brand /><span className="live-badge">ACCESO PRIVADO</span></header>
-    <div className="login-layout"><div className="login-intro"><p className="eyebrow">TU ESPACIO DE ENTRENAMIENTO</p><h1>Tu esfuerzo.<br/><em>Tu progreso.</em></h1><p className="hero-description">Tus rutinas, tus series y tu historial. Inicia sesión para continuar donde lo dejaste.</p></div>
-      <section className="login-card" aria-labelledby="login-title"><p className="eyebrow">{registration ? 'TU CUENTA PERSONAL' : 'BIENVENIDO DE NUEVO'}</p><h2 id="login-title">{registration ? 'Crear mi cuenta' : 'Iniciar sesión'}</h2>
+    <div className="login-layout">
+      <section className="login-card" aria-labelledby="login-title"><h1 id="login-title">{registration ? 'Crear mi cuenta' : 'Iniciar sesión'}</h1>
         {notice && <div className="login-notice"><p role="status">{notice}</p><button onClick={retry} disabled={busy}>Comprobar sesión</button></div>}
         <ErrorNotice message={error}/>
         {statusError && <div className="login-notice"><p role="status">{statusError}</p><button onClick={loadStatus} disabled={busy}>Comprobar acceso</button></div>}
@@ -95,8 +95,7 @@ function Login({done, notice, retry}:{done:(owner:{username:string})=>void;notic
             <p className="muted">Usa el código privado de activación para vincular tu cuenta con tus entrenamientos.</p>
           </>}
           <label className="checkbox-label"><input type="checkbox" checked={remember} onChange={e=>setRemember(e.target.checked)} disabled={busy}/>Mantener mi sesión iniciada</label>
-          <p className="muted login-hint">Recuerda este dispositivo para entrar directamente a tu entrenamiento.</p>
-          <button className="primary" type="submit" disabled={busy}>{busy ? (registration ? 'Creando cuenta…' : 'Entrando…') : (registration ? 'Crear cuenta y entrar ↗' : 'Entrar a mi espacio ↗')}</button>
+          <button className="primary" type="submit" disabled={busy}>{busy ? (registration ? 'Creando cuenta…' : 'Entrando…') : (registration ? 'Crear cuenta y entrar' : 'Entrar')}</button>
         </form>
         {available && <button disabled={busy} onClick={()=>{setRegistration(!registration);setPassword('');setConfirmation('');setActivation('');setError('')}}>{registration ? 'Ya tengo acceso. Iniciar sesión' : 'Crear mi cuenta'}</button>}
       </section>
@@ -179,23 +178,23 @@ function WorkoutApp({authVersion}:{authVersion:number}) {
   return <><div className={active ? 'browsing-active' : ''} hidden={view==='session'}>{view==='detail' && selected ? <WorkoutDetail workout={selected} back={()=>navigate('history')} deleteWorkout={deleteWorkout} error={error} busy={lifecycleBusy}/> : <main>
     <header className="topbar"><Brand /></header>
     <ErrorNotice message={error} />
-    <div className="hero"><div><p className="eyebrow">{view === 'home' ? 'TU PRÓXIMA SESIÓN' : 'TU RECORRIDO'}</p><h1>{view === 'home' ? <>Cada serie<br /><em>cuenta.</em></> : <>Trabajo hecho.<br /><em>Fuerza ganada.</em></>}</h1><p className="hero-description">{view === 'home' ? 'Elige tu rutina. Encuentra tu ritmo. Hazla tuya.' : 'Vuelve a tus entrenamientos y encuentra tu referencia.'}</p></div><div className="hero-art" aria-hidden="true"><span>///</span><small>KEEP SHOWING UP</small></div></div>
+    <div className="view-title"><h1>{view==='home'?'Entrenar':view==='history'?'Historial':view==='progress'?'Progreso':'Ajustes'}</h1></div>
     {view==='progress'?<Progress workouts={history} open={openDetail}/>:view==='history'?<>
-      <div className="section-heading"><h2>Historial</h2><span className="badge">{history.filter(workout=>workout.ended_at).length} sesiones</span></div>
+      <div className="section-heading"><h2>Sesiones</h2><span className="badge">{history.filter(workout=>workout.ended_at).length} sesiones</span></div>
       {loadingDetail && <p role="status" className="muted">Abriendo sesión…</p>}
       <AttendanceCalendar workouts={history} open={openDetail}/>
     </>:view==='settings'?<>
       <div className="section-heading"><h2>Configuración</h2></div>
-      <section className="settings-placeholder"><span className="settings-placeholder-icon" aria-hidden="true">⚙</span><h3>Próximamente</h3><p>Este espacio se preparará para las opciones de tu cuenta y de la aplicación.</p></section>
+      <section className="settings-placeholder"><span className="settings-placeholder-icon" aria-hidden="true">⚙</span><h3>Sin opciones disponibles</h3></section>
     </>: <>
-      <div className="section-heading"><h2>El entrenamiento de hoy</h2><span className="eyebrow">A TU RITMO</span></div>
+      <div className="section-heading"><h2>Rutinas</h2></div>
       <div className="routine-grid">{routines.map(routine => { const info= routineInfo[routine.name]; return <button className="routine" data-routine={routine.name} key={routine.id} disabled={!!active || lifecycleBusy} onClick={() => start(routine.id)}>
         <span className="routine-top"><span className="routine-tag">{routine.name}</span><span className="routine-number" aria-hidden="true">{info?.number || '↗'}</span></span>
-        <span className="routine-title">{info?.title || routine.name}</span><span className="routine-description">{info?.subtitle || 'Una sesión para ti'}</span>
+        <span className="routine-title">{info?.title || routine.name}</span>{info&&<span className="routine-description">{info.subtitle}</span>}
         <span className="routine-footer"><span>{routine.exercises.length ? routine.exercises.length + ' ejercicios' : 'Empieza vacío'}</span><span className="round-arrow" aria-hidden="true">↗</span></span>
       </button> })}</div>
     </>}
-    <footer className="page-footer"><Brand /><span>UNA SERIE A LA VEZ.</span></footer>
+    <footer className="page-footer"><Brand /></footer>
   </main>}</div>
     <BottomNavigation view={view} navigate={destination=>destination==='home'&&active?resumeSession():navigate(destination)}/>
     {active && <div hidden={view!=='session'}><Session key={active.id} workout={active} history={history} lifecycleBusy={lifecycleBusy} refresh={load} finish={finish} cancelWorkout={cancelWorkout} error={error} browse={()=>navigate(returnView)}/></div>}
@@ -225,13 +224,13 @@ function BottomNavigation({view,navigate}:{view:'home'|'history'|'detail'|'sessi
 
 function WorkoutDetail({ workout, back, deleteWorkout, error, busy }:{ workout:Workout; back:() => void; deleteWorkout:(workout:Workout) => void; error:string; busy:boolean }) {
   return <main><header className="topbar"><Brand /><button onClick={back}>← Historial</button></header>
-    <div className="page-title"><p className="eyebrow">SESIÓN COMPLETADA</p><h1>{routineInfo[workout.routine.name]?.title || workout.routine.name}<em>.</em></h1><p className="muted">{formatDate(workout.started_at)}</p><div className="session-metrics"><span>{duration(workout)}</span><span>{workout.exercises.length} ejercicios</span><span>{workout.exercises.reduce((total,item)=>total+item.sets.length,0)} series</span></div></div>
+    <div className="page-title"><p className="eyebrow">SESIÓN COMPLETADA</p><h1>{routineInfo[workout.routine.name]?.title || workout.routine.name}</h1><p className="muted">{formatDate(workout.started_at)}</p><div className="session-metrics"><span>{duration(workout)}</span><span>{workout.exercises.length} ejercicios</span><span>{workout.exercises.reduce((total,item)=>total+item.sets.length,0)} series</span></div></div>
     <ErrorNotice message={error} />
     {workout.notes && <aside className="notes"><p className="eyebrow">NOTAS DE LA SESIÓN</p><p>{workout.notes}</p></aside>}
     <div className="session history-detail">{workout.exercises.map(item => <section className={'exercise-card '+(item.skipped ? 'skip' : '')} key={item.id}>
       <div className="exercise-heading"><span className="exercise-number">{String(item.position).padStart(2,'0')}</span><h2>{item.exercise_name_snapshot}</h2><span className="badge">{item.skipped ? 'Omitido' : item.sets.length+' series'}</span></div>
       {!item.skipped && (item.sets.length ? <WorkoutRows item={item} /> : <p className="muted">Sin series registradas.</p>)}
-    </section>)}</div><div className="danger-zone"><p>Este registro forma parte de tu historial.</p><button className="delete-workout" disabled={busy} onClick={() => deleteWorkout(workout)}>Eliminar entrenamiento</button></div>
+    </section>)}</div><div className="danger-zone"><button className="delete-workout" disabled={busy} onClick={() => deleteWorkout(workout)}>Eliminar entrenamiento</button></div>
   </main>
 }
 
@@ -241,7 +240,7 @@ function ExerciseHistory({name,records}:{name:string;records:ExerciseRecordRefer
     {records.length>0?<ol className="exercise-history-records">{records.map(record=><li className="exercise-history-row" key={record.set.id}>
       <span className="exercise-history-meta"><time dateTime={record.date}>{new Intl.DateTimeFormat('es-MX',{day:'numeric',month:'short',year:'numeric'}).format(new Date(timestamp(record.date)))}</time><span>Serie {record.set.position}</span></span>
       <b>{referenceSetLabel(record.set)}</b><small>Serie efectiva</small>
-    </li>)}</ol>:<p className="exercise-history-empty">Aún no hay registros de este ejercicio. Aquí verás tus últimas series al completar una sesión.</p>}
+    </li>)}</ol>:<p className="exercise-history-empty">Sin series efectivas en sesiones completadas.</p>}
   </aside>
 }
 
@@ -261,11 +260,11 @@ function ExercisePicker({catalog,choose,custom,close,draft,setDraft}:{catalog:Ex
     finally { setBusy(false) }
   }
   return <dialog className="sheet" ref={dialog} onCancel={event=>{if(busy)event.preventDefault();else close()}} aria-labelledby="catalog-title">
-    <div className="sheet-heading"><div><p className="eyebrow">DALE TU FORMA</p><h2 id="catalog-title">Agregar o sustituir</h2></div><button onClick={close} disabled={busy} aria-label="Cerrar catálogo">×</button></div>
+    <div className="sheet-heading"><h2 id="catalog-title">Agregar o sustituir</h2><button onClick={close} disabled={busy} aria-label="Cerrar catálogo">×</button></div>
     <p className="muted">Elige un ejercicio. Puedes saltar el que quieras sustituir.</p>
     <ErrorNotice message={error}/>
     {custom && <form className="custom-exercise" onSubmit={event=>{event.preventDefault();run(()=>custom(draft.name,draft.convention))}}>
-      <h3>¿No está en la lista?</h3>
+      <h3>Nuevo ejercicio</h3>
       <label className="field"><span>Nombre del ejercicio</span><input value={draft.name} onChange={event=>setDraft({...draft,name:event.target.value})} required maxLength={100} disabled={busy}/></label>
       <label className="field"><span>Cómo registrarás la carga</span><select aria-label="Cómo registrarás la carga" value={draft.convention} onChange={event=>setDraft({...draft,convention:event.target.value as 'TOTAL'|'PER_HAND'})} disabled={busy}><option value="TOTAL">Carga total</option><option value="PER_HAND">Por mano</option></select></label>
       <button className="primary" disabled={busy || !draft.name.trim()}>{busy?'Agregando…':'Crear y agregar ejercicio'}</button>
@@ -324,13 +323,13 @@ function Session({ workout, history, refresh, finish, cancelWorkout, error, brow
 
   return <main className="workout-page">
     <header className="topbar workout-topbar"><div className="session-heading-navigation"><button className="session-back" onClick={browse} aria-label="Volver a la aplicación"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg><span>Volver</span></button><Brand /></div><span className="live-badge"><i /> SESIÓN EN CURSO</span></header>
-    <div className="session-title"><div><p className="eyebrow">HOY TOCA</p><h1>{routineInfo[workout.routine.name]?.title || workout.routine.name}<em>.</em></h1><div className="session-metrics"><span role="timer" aria-label="Tiempo de sesión">{clock(elapsed)}</span><span>{workout.exercises.length} ejercicios</span><span>{workout.exercises.reduce((total,item)=>total+item.sets.length,0)} series registradas</span></div></div><div className="header-actions"><button disabled={locked} onClick={finish} className="primary">Finalizar sesión ↗</button><button disabled={locked} onClick={cancelWorkout} className="cancel-workout">Cancelar entrenamiento</button></div></div>
+    <div className="session-title"><div><h1>{routineInfo[workout.routine.name]?.title || workout.routine.name}</h1><div className="session-metrics"><span role="timer" aria-label="Tiempo de sesión">{clock(elapsed)}</span><span>{workout.exercises.length} ejercicios</span><span>{workout.exercises.reduce((total,item)=>total+item.sets.length,0)} series registradas</span></div></div><div className="header-actions"><button disabled={locked} onClick={finish} className="primary">Finalizar sesión ↗</button><button disabled={locked} onClick={cancelWorkout} className="cancel-workout">Cancelar entrenamiento</button></div></div>
     <ErrorNotice message={error || actionError} />
     {editing && !editVisible && <button onClick={()=>setEditVisible(true)}>Continuar edición de serie</button>}
     {busy && <p role="status" className="muted">Guardando cambio…</p>}
-    {seconds > 0 && <div className="rest-timer" role="timer" aria-label="Tiempo de descanso restante"><div><p className="eyebrow">RECUPERA EL AIRE</p><b>Tu siguiente serie te espera.</b></div><span className="rest-clock">{Math.floor(seconds/60)}:{String(seconds%60).padStart(2,'0')}</span><button disabled={locked} onClick={skipRest}>Omitir descanso</button><div className="rest-track" aria-hidden="true"><span style={{width:(seconds/165*100)+'%'}} /></div></div>}
+    {seconds > 0 && <div className="rest-timer" role="timer" aria-label="Tiempo de descanso restante"><div><b>Descanso</b></div><span className="rest-clock">{Math.floor(seconds/60)}:{String(seconds%60).padStart(2,'0')}</span><button disabled={locked} onClick={skipRest}>Omitir descanso</button><div className="rest-track" aria-hidden="true"><span style={{width:(seconds/165*100)+'%'}} /></div></div>}
     <div className="workout-content">
-      <div className="section-heading"><h2>Tu entrenamiento</h2><span className="eyebrow">{workout.routine.name}</span></div>
+      <div className="section-heading"><h2>Entrenamiento</h2><span className="eyebrow">{workout.routine.name}</span></div>
       {selectedExercise?<div className="exercise-switcher">
         <p className="exercise-step" role="status">Ejercicio {selectedIndex+1} de {orderedExercises.length}</p>
         <div className="exercise-switcher-controls"><button aria-label="Ejercicio anterior" disabled={locked||selectedIndex===0} onClick={()=>setSelectedExerciseId(orderedExercises[selectedIndex-1].id)}>←</button><label><span>Ejercicio actual</span><select aria-label="Ejercicio actual" value={selectedExercise.id} disabled={locked} onChange={event=>setSelectedExerciseId(Number(event.target.value))}>{orderedExercises.map(item=><option key={item.id} value={item.id}>{item.position}. {item.exercise_name_snapshot}{item.skipped?' · Omitido':''}</option>)}</select></label><button aria-label="Ejercicio siguiente" disabled={locked||selectedIndex===orderedExercises.length-1} onClick={()=>setSelectedExerciseId(orderedExercises[selectedIndex+1].id)}>→</button></div>
