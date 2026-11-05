@@ -22,8 +22,9 @@ Frontend copy and spacing only. No API, persistence, timer, workout or authentic
 - `node scripts/test-owner-auth.mjs` passes the existing login, registration, navigation, workout, history and progress flow with updated text selectors, including widths 320, 375, 768 and 1440.
 - Visually inspected the 375px registration/history captures and 1440px progress capture. No text overflow or unnecessary hero space.
 - `git diff --check` passes. Backend behavior is unchanged; backend verification is left to the existing PR CI.
+- Quality-gate reviewed #28's title, description, files and diff against `main`: copy and spacing only; instructions, confirmations, accessibility labels and workout behavior are preserved. No blocking findings. Browser coverage remains the existing full flow; native floating-window text is covered by inspection and build rather than a separate PiP browser test.
 
 ## Delivery
 
 - Branch: `feature/simple-interface-copy`
-- PR: pending creation.
+- PR: [#28](https://github.com/Miike886/PersonalGymRegistry/pull/28), open during quality-gate review. Merge and production deployment are authorized by the owner after verification.
