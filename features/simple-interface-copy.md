@@ -21,10 +21,10 @@ Frontend copy and spacing only. No API, persistence, timer, workout or authentic
 - `npm run build` passes TypeScript, Vite and PWA generation.
 - `node scripts/test-owner-auth.mjs` passes the existing login, registration, navigation, workout, history and progress flow with updated text selectors, including widths 320, 375, 768 and 1440.
 - Visually inspected the 375px registration/history captures and 1440px progress capture. No text overflow or unnecessary hero space.
-- `git diff --check` passes. Backend behavior is unchanged; backend verification is left to the existing PR CI.
+- `git diff --check` passes. All PR CI checks pass, including backend tests, PostgreSQL concurrency, dependency audits, frontend build and owner browser flow.
 - Quality-gate reviewed #28's title, description, files and diff against `main`: copy and spacing only; instructions, confirmations, accessibility labels and workout behavior are preserved. No blocking findings. Browser coverage remains the existing full flow; native floating-window text is covered by inspection and build rather than a separate PiP browser test.
 
 ## Delivery
 
 - Branch: `feature/simple-interface-copy`
-- PR: [#28](https://github.com/Miike886/PersonalGymRegistry/pull/28), open during quality-gate review. Merge and production deployment are authorized by the owner after verification.
+- PR: [#28](https://github.com/Miike886/PersonalGymRegistry/pull/28), merged into `main` as `f9bb5ac` after quality review and passing CI. Production deploys automatically through the existing Vercel integration.
