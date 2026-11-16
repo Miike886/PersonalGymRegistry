@@ -15,7 +15,7 @@ type WorkoutExercise = { id:number; exercise_id:number|null; exercise_name_snaps
 type Workout = { id:number; routine_id:number; started_at:string; ended_at:string|null; rest_until:string|null; notes:string|null; routine:{name:string}; exercises:WorkoutExercise[] }
 type Variant = {id:number;name:string;load_convention:'TOTAL'|'PER_HAND'}
 type Exercise = { id:number; name:string; load_convention:'TOTAL'|'PER_HAND'; variants?:Variant[] }
-const exerciseLabel=(item:WorkoutExercise)=>item.exercise_name_snapshot+(item.variant_name_snapshot?' ? '+item.variant_name_snapshot:'')
+const exerciseLabel=(item:WorkoutExercise)=>item.exercise_name_snapshot+(item.variant_name_snapshot?' · '+item.variant_name_snapshot:'')
 
 class ApiError extends Error {
   constructor(public status:number, message:string) { super(message) }
@@ -199,7 +199,7 @@ function WorkoutApp({authVersion}:{authVersion:number}) {
     <footer className="page-footer"><Brand /></footer>
   </main>}</div>
     <BottomNavigation view={view} navigate={destination=>destination==='home'&&active?resumeSession():navigate(destination)}/>
-    {active && <div hidden={view!=='session'}><Session key={active.id} workout={active} history={history} lifecycleBusy={lifecycleBusy} refresh={load} finish={finish} cancelWorkout={cancelWorkout} error={error} browse={()=>navigate(returnView)}/></div>}
+    {active && <div hidden={view!=='session'}><Session key={active.id} workout={active} history={history} lifecycleBusy={lifecycleBusy} variantSelected={item=>{loadVersion.current++;setActive(current=>current?{...current,exercises:current.exercises.map(entry=>entry.id===item.id?item:entry)}:current)}} refresh={load} finish={finish} cancelWorkout={cancelWorkout} error={error} browse={()=>navigate(returnView)}/></div>}
     {active && <FloatingTimer workout={active}/>}
     {active && view!=='session' && <ActiveSessionBar workout={active} resume={resumeSession}/>}
   </>
@@ -289,22 +289,26 @@ function VariantPicker({item,variants,choose,close}:{item:WorkoutExercise;varian
     finally{pending.current=false;setBusy(false)}
   }
   return <dialog ref={dialog} className="sheet" aria-labelledby="variant-title" onCancel={event=>{if(busy)event.preventDefault();else close()}}>
-    <div className="sheet-heading"><h2 id="variant-title">Variante del ejercicio</h2><button aria-label="Cerrar variantes" disabled={busy} onClick={close}>?</button></div>
+    <div className="sheet-heading"><h2 id="variant-title">Variante del ejercicio</h2><button aria-label="Cerrar variantes" disabled={busy} onClick={close}>×</button></div>
     <p className="muted">{item.exercise_name_snapshot}. Cada variante tiene su propio historial.</p>
     <ErrorNotice message={error}/>
-    <div className="catalog-list"><button disabled={busy} onClick={()=>run({variant_id:null})}>Original ? {item.exercise_name_snapshot}</button>{variants.map(variant=><button key={variant.id} disabled={busy} onClick={()=>run({variant_id:variant.id})}>{variant.name}{variant.load_convention==='PER_HAND'?' ? Por mano':''}</button>)}</div>
+    <div className="catalog-list"><button disabled={busy} onClick={()=>run({variant_id:null})}>Original · {item.exercise_name_snapshot}</button>{variants.map(variant=><button key={variant.id} disabled={busy} onClick={()=>run({variant_id:variant.id})}>{variant.name}{variant.load_convention==='PER_HAND'?' · Por mano':''}</button>)}</div>
     <form className="custom-exercise" onSubmit={event=>{event.preventDefault();run({name,load_convention:convention})}}>
       <h3>Nueva variante</h3>
-      <label className="field"><span>Nombre de la variante</span><input required maxLength={100} placeholder="Ej. M?quina morada" value={name} disabled={busy} onChange={event=>setName(event.target.value)}/></label>
-      <label className="field"><span>Registro de carga de la variante</span><select value={convention} disabled={busy} onChange={event=>setConvention(event.target.value as 'TOTAL'|'PER_HAND')}><option value="TOTAL">Peso que ingreses (total o indicado en m?quina)</option><option value="PER_HAND">Peso por mano</option></select></label>
-      <button className="primary" disabled={busy||!name.trim()}>{busy?'Guardando?':'Crear y usar variante'}</button>
+      <label className="field"><span>Nombre de la variante</span><input required maxLength={100} placeholder="Ej. Máquina morada" value={name} disabled={busy} onChange={event=>setName(event.target.value)}/></label>
+      <label className="field"><span>Registro de carga de la variante</span><select aria-label="Registro de carga de la variante" value={convention} disabled={busy} onChange={event=>setConvention(event.target.value as 'TOTAL'|'PER_HAND')}><option value="TOTAL">Peso que ingreses (total o indicado en máquina)</option><option value="PER_HAND">Peso por mano</option></select></label>
+      <button className="primary" disabled={busy||!name.trim()}>{busy?'Guardando…':'Crear y usar variante'}</button>
     </form>
     <button className="sheet-close" disabled={busy} onClick={close}>Volver al entrenamiento</button>
   </dialog>
 }
 
-function Session({ workout, history, refresh, finish, cancelWorkout, error, browse, lifecycleBusy }:{ workout:Workout; history:Workout[]; refresh:() => Promise<void>; finish:() => void; cancelWorkout:() => void; error:string; browse:()=>void; lifecycleBusy:boolean }) {
-  const [draft]=useState(()=>readDraft(workout.id))
+function Session({ workout, history, refresh, finish, cancelWorkout, error, browse, lifecycleBusy, variantSelected }:{ workout:Workout; history:Workout[]; refresh:() => Promise<void>; finish:() => void; cancelWorkout:() => void; error:string; browse:()=>void; lifecycleBusy:boolean; variantSelected:(item:WorkoutExercise)=>void }) {
+  const [draft]=useState(()=>{
+    const saved=readDraft(workout.id)
+    const matches=(id:string)=>(saved.variantIds?.[Number(id)]??null)===(workout.exercises.find(item=>item.id===Number(id))?.variant_id??null)
+    return {...saved,weights:Object.fromEntries(Object.entries(saved.weights||{}).filter(([id])=>matches(id))),weightTypes:Object.fromEntries(Object.entries(saved.weightTypes||{}).filter(([id])=>matches(id))) as typeof saved.weightTypes,repsById:saved.repsById?Object.fromEntries(Object.entries(saved.repsById).filter(([id])=>matches(id))):undefined,warmsById:saved.warmsById?Object.fromEntries(Object.entries(saved.warmsById).filter(([id])=>matches(id))):undefined}
+  })
   const [selectedExerciseId,setSelectedExerciseId]=useState<number|undefined>(draft.selectedExerciseId)
   const orderedExercises=[...workout.exercises].sort((a,b)=>a.position-b.position)
   const selectedExercise=orderedExercises.find(item=>item.id===selectedExerciseId)||orderedExercises[0]
@@ -315,7 +319,18 @@ function Session({ workout, history, refresh, finish, cancelWorkout, error, brow
   const loadCatalog = () => { setCatalogError(''); api('/exercises').then(setCatalog).catch((err:any)=>setCatalogError(err.message)) }
   useEffect(() => { loadCatalog() }, [workout.id])
   const [customDraft,setCustomDraft]=useState<ExerciseDraft>(draft.customDraft||{name:'',convention:'TOTAL'})
-  useEffect(()=>{saveDraft(workout.id,{selectedExerciseId:selectedExercise?.id,weights,weightTypes,repsById:reps,warmsById:warm,customDraft})},[workout.id,selectedExercise?.id,weights,weightTypes,reps,warm,customDraft])
+  const previousVariants=useRef(Object.fromEntries(workout.exercises.map(item=>[item.id,item.variant_id??null])))
+  const variantSignature=JSON.stringify(workout.exercises.map(item=>[item.id,item.variant_id??null]))
+  useEffect(()=>{
+    const current=Object.fromEntries(workout.exercises.map(item=>[item.id,item.variant_id??null]))
+    const changed=Object.keys(current).filter(id=>id in previousVariants.current&&previousVariants.current[id]!==current[id])
+    if(changed.length){
+      const keep=<T,>(values:Record<number,T>)=>Object.fromEntries(Object.entries(values).filter(([id])=>!changed.includes(id)))
+      setWeights(keep);setReps(keep);setWeightTypes(keep);setWarm(keep)
+    }
+    previousVariants.current=current
+  },[variantSignature])
+  useEffect(()=>{saveDraft(workout.id,{variantIds:Object.fromEntries(workout.exercises.map(item=>[item.id,item.variant_id??null])),selectedExerciseId:selectedExercise?.id,weights,weightTypes,repsById:reps,warmsById:warm,customDraft})},[workout.id,variantSignature,selectedExercise?.id,weights,weightTypes,reps,warm,customDraft])
   const exercise = (item:WorkoutExercise) => catalog.find(entry => entry.id === item.exercise_id)
   const convention = (item:WorkoutExercise) => (item.variant_load_convention_snapshot??exercise(item)?.load_convention) === 'PER_HAND' ? 'lb por mano' : item.variant_id?'lb':'lb totales'
   const typeFor = (item:WorkoutExercise):WeightType => weightTypes[item.id] || 'EXTERNAL'
@@ -325,7 +340,8 @@ function Session({ workout, history, refresh, finish, cancelWorkout, error, brow
   const chooseVariant=async(body:{variant_id:number|null}|{name:string;load_convention:'TOTAL'|'PER_HAND'})=>{
     if(!selectedExercise)return
     const item=selectedExercise
-    await api(`/workout-exercises/${item.id}/variant`,{method:'PUT',body:JSON.stringify(body)})
+    const updated=await api(`/workout-exercises/${item.id}/variant`,{method:'PUT',body:JSON.stringify(body)})
+    variantSelected(updated)
     setWeights(current=>({...current,[item.id]:''}));setReps(current=>({...current,[item.id]:''}));setWeightTypes(current=>({...current,[item.id]:'EXTERNAL'}));setWarm(current=>({...current,[item.id]:false}))
     await refresh();loadCatalog();setVariantOpen(false)
   }

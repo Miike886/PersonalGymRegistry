@@ -6,7 +6,7 @@
 - Crear variantes reutilizables desde la sesión, con nombre y registro de carga tal como se ingresa o por mano. El peso sigue siendo manual, sin conversiones ni cálculos de máquinas.
 - El registro Original conserva los ejercicios y series anteriores. No se asignan variantes retroactivamente ni se renombran ejercicios existentes.
 - Referencias recientes y gráficas separan el ejercicio y la variante; el detalle histórico muestra ambos nombres.
-- La selección se guarda en el servidor, sobrevive a recargas y solo puede cambiarse cuando el ejercicio no tiene series. Cambiarla limpia peso, repeticiones y tipo de carga en borrador para no reutilizar datos de otra máquina.
+- La selección se guarda en el servidor, sobrevive a recargas y solo puede cambiarse cuando el ejercicio no tiene series. Cambiarla limpia peso, repeticiones y tipo de carga en borrador para no reutilizar datos de otra máquina. Los borradores incluyen la identidad de variante y se descartan si el servidor tiene otra selección al recuperar la sesión.
 
 ## API y datos
 
@@ -23,4 +23,8 @@
 ## Verificación y entrega
 
 - Rama: `feature/exercise-variants`.
-- Verificación y PR: pendientes de completar durante esta entrega.
+- Backend: `uv run --locked pytest -q`, 71 pruebas correctas. Migración SQLite con series históricas, snapshots, validación, autorización, reutilización y rechazo de cambios con series o sesión finalizada.
+- Frontend: `npm.cmd test` y `npm.cmd run build`, correctos. Referencias y gráficas separan Original y cada variante.
+- Navegador Edge/API/proxy con base temporal: creación y reintento tras error, reutilización, selección Original, borradores, recarga, bloqueo con series, detalle histórico y gráficas separadas. Diseños comprobados a 320/375/1440 px; capturas móviles inspeccionadas.
+- PostgreSQL: regresión añadida para selección en espera mientras otra conexión registra una serie, incluso con relaciones ORM previamente cargadas. Ejecución remota pendiente de CI; no hay servidor PostgreSQL local activo.
+- PR y revisión quality-gate: pendientes de completar durante esta entrega. No se ha desplegado ni modificado la base de producción.

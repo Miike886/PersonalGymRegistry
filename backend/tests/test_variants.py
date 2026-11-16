@@ -98,7 +98,7 @@ def test_variant_validation_and_authentication():
             db.get(Exercise, item["exercise_id"]).is_active = False
             db.commit()
         assert client.put(path, json={"name": "Smith"}).status_code == 409
-    with TestClient(app) as anonymous:
+    with TestClient(app, headers={"Origin": "http://localhost:5173"}) as anonymous:
         assert anonymous.put(path, json={"name": "Smith"}).status_code == 401
 
 
