@@ -22,6 +22,15 @@ class Exercise(Base):
     name: Mapped[str] = mapped_column(String(100), unique=True)
     load_convention: Mapped[LoadConvention] = mapped_column(Enum(LoadConvention), default=LoadConvention.TOTAL)
     is_active: Mapped[bool] = mapped_column(default=True)
+    variants: Mapped[list["ExerciseVariant"]] = relationship(order_by="ExerciseVariant.name")
+
+class ExerciseVariant(Base):
+    __tablename__ = "exercise_variants"
+    __table_args__ = (UniqueConstraint("exercise_id", "name"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    exercise_id: Mapped[int] = mapped_column(ForeignKey("exercises.id"), index=True)
+    name: Mapped[str] = mapped_column(String(100))
+    load_convention: Mapped[LoadConvention] = mapped_column(Enum(LoadConvention))
 
 class RoutineExercise(Base):
     __tablename__ = "routine_exercises"
@@ -52,6 +61,9 @@ class WorkoutExercise(Base):
     workout_id: Mapped[int] = mapped_column(ForeignKey("workouts.id", ondelete="CASCADE"), index=True)
     exercise_id: Mapped[int | None] = mapped_column(ForeignKey("exercises.id"), nullable=True)
     exercise_name_snapshot: Mapped[str] = mapped_column(String(100))
+    variant_id: Mapped[int | None] = mapped_column(ForeignKey("exercise_variants.id"), nullable=True)
+    variant_name_snapshot: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    variant_load_convention_snapshot: Mapped[LoadConvention | None] = mapped_column(Enum(LoadConvention), nullable=True)
     position: Mapped[int] = mapped_column(Integer)
     skipped: Mapped[bool] = mapped_column(default=False)
     workout: Mapped[Workout] = relationship(back_populates="exercises")

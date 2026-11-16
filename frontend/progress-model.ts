@@ -1,5 +1,5 @@
 type SetRecord={reps:number;load_value:number|null;load_unit:'kg'|'lb';weight_type:string;set_type:string}
-type ExerciseRecord={exercise_id:number|null;exercise_name_snapshot:string;sets:SetRecord[]}
+type ExerciseRecord={exercise_id:number|null;exercise_name_snapshot:string;variant_id?:number|null;variant_name_snapshot?:string|null;sets:SetRecord[]}
 export type ProgressWorkout={id:number;started_at:string;ended_at:string|null;routine:{name:string};exercises:ExerciseRecord[]}
 export type ProgressPoint={id:number;date:string;value:number;reps:number;sets:number}
 const dateOf=(value:string)=>new Date(/(?:Z|[+-]\d{2}:\d{2})$/.test(value)?value:value+'Z')
@@ -12,9 +12,9 @@ export function workoutSummary(workouts:ProgressWorkout[]){
   const completed=workouts.filter(workout=>workout.ended_at)
   return {sessions:completed.length,days:new Set(completed.map(w=>dayOf(w.started_at))).size,sets:completed.reduce((n,w)=>n+w.exercises.reduce((n,e)=>n+e.sets.filter(s=>s.set_type==='WORKING').length,0),0),minutes:Math.round(completed.reduce((n,w)=>n+Math.max(0,(dateOf(w.ended_at!).getTime()-dateOf(w.started_at).getTime())/60000),0))}
 }
-export function exercisePoints(workouts:ProgressWorkout[],exerciseId:number,unit:string,weightType:string):ProgressPoint[]{
+export function exercisePoints(workouts:ProgressWorkout[],exerciseId:number,unit:string,weightType:string,variantId:number|null=null):ProgressPoint[]{
   return workouts.filter(w=>w.ended_at).map(workout=>{
-    const sets=workout.exercises.filter(e=>e.exercise_id===exerciseId).flatMap(e=>e.sets).filter(s=>s.set_type==='WORKING' && s.weight_type===weightType && (weightType==='BODYWEIGHT' || s.load_unit===unit))
+    const sets=workout.exercises.filter(e=>e.exercise_id===exerciseId && (e.variant_id??null)===variantId).flatMap(e=>e.sets).filter(s=>s.set_type==='WORKING' && s.weight_type===weightType && (weightType==='BODYWEIGHT' || s.load_unit===unit))
     const measurable=weightType==='BODYWEIGHT'?sets:sets.filter(s=>s.load_value!==null)
     if(!measurable.length)return null
     // For assisted sets, display the lowest recorded assistance; never call it external load or an estimated max.

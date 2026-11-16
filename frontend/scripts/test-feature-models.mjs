@@ -49,3 +49,14 @@ assert.equal(referenceSetLabel(set(null,'kg','BODYWEIGHT_ASSISTED')),'8×asisten
 assert.equal(referenceSetLabel(set(0,'lb','BODYWEIGHT_PLUS')),'8×peso corporal + 0 lb')
 assert.equal(referenceSetLabel(set(20,'kg','BODYWEIGHT_ASSISTED')),'8×20 kg de asistencia')
 console.log('PASS: missing loads remain unknown, distinct from recorded zero, with original types and units.')
+const variantWorkout=workout(10,'2026-01-04T20:00:00Z',[set(250)])
+variantWorkout.exercises[0].variant_id=12
+assert.deepEqual(exercisePoints([...workouts,variantWorkout],7,'lb','EXTERNAL').map(p=>p.value),[30,35])
+assert.deepEqual(exercisePoints([...workouts,variantWorkout],7,'lb','EXTERNAL',12).map(p=>p.value),[250])
+assert.deepEqual(exercisePoints([...workouts,variantWorkout],7,'lb','EXTERNAL',13),[])
+const variantReference=exerciseWorkout(10,'2026-01-04T10:00:00Z','2026-01-04T11:00:00Z',7,[recordedSet(50,1,'2026-01-04T10:10:00Z')])
+variantReference.exercises[0].variant_id=12
+assert.deepEqual(recentExerciseRecords([...references,variantReference],7).map(r=>r.set.id),[3,1])
+assert.deepEqual(recentExerciseRecords([...references,variantReference],7,2,12).map(r=>r.set.id),[50])
+assert.deepEqual(recentExerciseRecords([...references,variantReference],7,2,13),[])
+console.log('PASS: references and progress isolate variants from the original exercise and other machines.')

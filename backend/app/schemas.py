@@ -4,7 +4,8 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 from .models import LoadConvention, SetType, WeightType
 
 class ORMModel(BaseModel): model_config = ConfigDict(from_attributes=True)
-class ExerciseOut(ORMModel): id:int; name:str; load_convention:LoadConvention; is_active:bool
+class ExerciseVariantOut(ORMModel): id:int; name:str; load_convention:LoadConvention
+class ExerciseOut(ORMModel): id:int; name:str; load_convention:LoadConvention; is_active:bool; variants:list[ExerciseVariantOut]=[]
 class RoutineExerciseOut(ORMModel): id:int; position:int; exercise:ExerciseOut
 class RoutineOut(ORMModel): id:int; name:str; exercises:list[RoutineExerciseOut]=[]
 class SetCreate(BaseModel):
@@ -53,6 +54,29 @@ class WorkoutExerciseUpdate(BaseModel):
     def non_null_update(cls,value):
         if value is None: raise ValueError("Este campo no puede ser nulo")
         return value
-class WorkoutExerciseOut(ORMModel): id:int; exercise_id:int|None; exercise_name_snapshot:str; position:int; skipped:bool; sets:list[SetOut]=[]
+class VariantSelection(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    variant_id:int|None=Field(default=None,gt=0)
+    name:str|None=Field(default=None,min_length=1,max_length=100)
+    load_convention:LoadConvention=LoadConvention.TOTAL
+
+    @field_validator("name",mode="before")
+    @classmethod
+    def normalize_name(cls,value):
+        return " ".join(value.split()) if isinstance(value,str) else value
+
+    @model_validator(mode="after")
+    def one_source(self):
+        if self.name is not None and self.variant_id is not None:
+            raise ValueError("Elige una variante existente o crea una nueva")
+        if self.name is None and "variant_id" not in self.model_fields_set:
+            raise ValueError("Indica una variante o el registro original")
+        return self
+
+class WorkoutExerciseOut(ORMModel):
+    id:int; exercise_id:int|None; exercise_name_snapshot:str; position:int; skipped:bool; sets:list[SetOut]=[]
+    variant_id:int|None=None
+    variant_name_snapshot:str|None=None
+    variant_load_convention_snapshot:LoadConvention|None=None
 class WorkoutCreate(BaseModel): routine_id:int; notes:str|None=None
 class WorkoutOut(ORMModel): id:int; routine_id:int; started_at:datetime; ended_at:datetime|None; rest_until:datetime|None; notes:str|None; routine:RoutineOut; exercises:list[WorkoutExerciseOut]=[]

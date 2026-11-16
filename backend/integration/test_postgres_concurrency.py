@@ -25,9 +25,9 @@ from alembic import command
 from alembic.config import Config
 from fastapi import HTTPException
 from app.config import settings
-from app.main import add_set, create_workout, locked_workout
+from app.main import add_set, create_workout, locked_workout, select_variant
 from app.models import Exercise, Routine, RoutineExercise, Workout, WorkoutSet
-from app.schemas import SetCreate, WorkoutCreate
+from app.schemas import SetCreate, VariantSelection, WorkoutCreate
 
 
 @pytest.fixture
@@ -78,6 +78,44 @@ def assert_blocked(sessions, waiter, holder):
             return
         time.sleep(0.02)
     raise AssertionError("The competing connection never waited for the expected PostgreSQL lock")
+
+
+def test_waiting_variant_change_cannot_reassign_new_set(sessions):
+    from app.models import ExerciseVariant, WorkoutExercise
+    workout_id, item_id = active_workout(sessions)
+    waiting, locked = Event(), Event()
+    waiter_pid = []
+    with sessions() as holder, ThreadPoolExecutor(max_workers=1) as pool:
+        holder_pid = holder.scalar(text("SELECT pg_backend_pid()"))
+        def contender():
+            with sessions() as db:
+                cached = db.get(WorkoutExercise, item_id)
+                assert cached.sets == []
+                waiter_pid.append(db.scalar(text("SELECT pg_backend_pid()")))
+                waiting.set()
+                assert locked.wait(5)
+                try:
+                    select_variant(item_id, VariantSelection(name="Different machine"), db)
+                except HTTPException as error:
+                    db.rollback()
+                    return error.status_code
+                return 200
+        future = pool.submit(contender)
+        try:
+            assert waiting.wait(5)
+            locked_workout(holder, workout_id)
+            holder.add(WorkoutSet(workout_exercise_id=item_id, position=1, reps=8, load_value=75))
+            holder.flush()
+            locked.set()
+            assert_blocked(sessions, waiter_pid[0], holder_pid)
+            holder.commit()
+            assert future.result(timeout=10) == 409
+        finally:
+            holder.rollback()
+            locked.set()
+    with sessions() as db:
+        assert db.get(WorkoutExercise, item_id).variant_id is None
+        assert db.scalar(select(func.count()).select_from(ExerciseVariant)) == 0
 
 
 def test_finish_prevents_waiting_set_write_even_with_stale_orm(sessions):
