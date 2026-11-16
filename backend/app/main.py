@@ -9,8 +9,8 @@ from sqlalchemy.orm import Session, joinedload
 from .database import Base, engine, get_db
 from .config import settings
 from .auth import require_owner, router as auth_router
-from .models import Exercise, Routine, RoutineExercise, Workout, WorkoutExercise, WorkoutSet
-from .schemas import (ExerciseOut, RoutineOut, SetCreate, SetOut, SetUpdate, WorkoutCreate, WorkoutExerciseCreate, WorkoutExerciseOut, WorkoutExerciseUpdate, WorkoutOut)
+from .models import Exercise, ExerciseVariant, Routine, RoutineExercise, Workout, WorkoutExercise, WorkoutSet
+from .schemas import (ExerciseOut, RoutineOut, SetCreate, SetOut, SetUpdate, VariantSelection, WorkoutCreate, WorkoutExerciseCreate, WorkoutExerciseOut, WorkoutExerciseUpdate, WorkoutOut)
 
 def detail_options():
     return (joinedload(Workout.routine).joinedload(Routine.exercises).joinedload(RoutineExercise.exercise), joinedload(Workout.exercises).joinedload(WorkoutExercise.sets))
@@ -179,6 +179,41 @@ def update_exercise(item_id:int, body:WorkoutExerciseUpdate, db:Session=Depends(
         place_exercise(db, item, changes.pop("position"))
     for key,value in changes.items(): setattr(item,key,value)
     db.commit(); db.refresh(item); return item
+
+@app.put("/workout-exercises/{item_id}/variant", response_model=WorkoutExerciseOut)
+def select_variant(item_id:int, body:VariantSelection, db:Session=Depends(get_db)):
+    item, _ = locked_exercise(db, item_id)
+    if item.sets:
+        raise HTTPException(409,"La variante no se puede cambiar mientras haya series registradas")
+    exercise = db.get(Exercise, item.exercise_id) if item.exercise_id else None
+    if exercise is None or not exercise.is_active:
+        raise HTTPException(409,"El ejercicio no está disponible en el catálogo")
+    variant = None
+    if body.name is not None:
+        variant = db.scalar(select(ExerciseVariant).where(
+            ExerciseVariant.exercise_id == exercise.id,
+            func.lower(ExerciseVariant.name) == body.name.lower(),
+        ))
+        if variant is not None and variant.load_convention != body.load_convention:
+            raise HTTPException(409,"La variante ya existe con otra forma de registrar la carga; selecciónala de la lista")
+        if variant is None:
+            variant = ExerciseVariant(exercise_id=exercise.id,name=body.name,load_convention=body.load_convention)
+            db.add(variant)
+            try:
+                db.flush()
+            except IntegrityError:
+                db.rollback()
+                raise HTTPException(409,"La variante ya existe; actualiza el catálogo y selecciónala") from None
+    elif body.variant_id is not None:
+        variant = db.get(ExerciseVariant, body.variant_id)
+        if variant is None or variant.exercise_id != exercise.id:
+            raise HTTPException(422,"La variante no pertenece a este ejercicio")
+    item.variant_id = variant.id if variant else None
+    item.variant_name_snapshot = variant.name if variant else None
+    item.variant_load_convention_snapshot = variant.load_convention if variant else None
+    db.commit()
+    db.refresh(item)
+    return item
 
 @app.post("/workout-exercises/{item_id}/sets", response_model=SetOut, status_code=201)
 def add_set(item_id:int, body:SetCreate, db:Session=Depends(get_db)):

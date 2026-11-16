@@ -11,9 +11,11 @@ import { referenceSetLabel } from './set-label'
 const API = '/api'
 type WeightType = 'EXTERNAL'|'BODYWEIGHT'|'BODYWEIGHT_PLUS'|'BODYWEIGHT_ASSISTED'
 type WorkoutSet = { id:number; position:number; reps:number; load_value:number|null; load_unit:'kg'|'lb'; weight_type:WeightType; set_type:string; created_at:string }
-type WorkoutExercise = { id:number; exercise_id:number|null; exercise_name_snapshot:string; position:number; skipped:boolean; sets:WorkoutSet[] }
+type WorkoutExercise = { id:number; exercise_id:number|null; exercise_name_snapshot:string; variant_id:number|null; variant_name_snapshot:string|null; variant_load_convention_snapshot:'TOTAL'|'PER_HAND'|null; position:number; skipped:boolean; sets:WorkoutSet[] }
 type Workout = { id:number; routine_id:number; started_at:string; ended_at:string|null; rest_until:string|null; notes:string|null; routine:{name:string}; exercises:WorkoutExercise[] }
-type Exercise = { id:number; name:string; load_convention:'TOTAL'|'PER_HAND' }
+type Variant = {id:number;name:string;load_convention:'TOTAL'|'PER_HAND'}
+type Exercise = { id:number; name:string; load_convention:'TOTAL'|'PER_HAND'; variants?:Variant[] }
+const exerciseLabel=(item:WorkoutExercise)=>item.exercise_name_snapshot+(item.variant_name_snapshot?' ? '+item.variant_name_snapshot:'')
 
 class ApiError extends Error {
   constructor(public status:number, message:string) { super(message) }
@@ -228,7 +230,7 @@ function WorkoutDetail({ workout, back, deleteWorkout, error, busy }:{ workout:W
     <ErrorNotice message={error} />
     {workout.notes && <aside className="notes"><p className="eyebrow">NOTAS DE LA SESIÓN</p><p>{workout.notes}</p></aside>}
     <div className="session history-detail">{workout.exercises.map(item => <section className={'exercise-card '+(item.skipped ? 'skip' : '')} key={item.id}>
-      <div className="exercise-heading"><span className="exercise-number">{String(item.position).padStart(2,'0')}</span><h2>{item.exercise_name_snapshot}</h2><span className="badge">{item.skipped ? 'Omitido' : item.sets.length+' series'}</span></div>
+      <div className="exercise-heading"><span className="exercise-number">{String(item.position).padStart(2,'0')}</span><h2>{exerciseLabel(item)}</h2><span className="badge">{item.skipped ? 'Omitido' : item.sets.length+' series'}</span></div>
       {!item.skipped && (item.sets.length ? <WorkoutRows item={item} /> : <p className="muted">Sin series registradas.</p>)}
     </section>)}</div><div className="danger-zone"><button className="delete-workout" disabled={busy} onClick={() => deleteWorkout(workout)}>Eliminar entrenamiento</button></div>
   </main>
@@ -275,13 +277,39 @@ function ExercisePicker({catalog,choose,custom,close,draft,setDraft}:{catalog:Ex
   </dialog>
 }
 
+function VariantPicker({item,variants,choose,close}:{item:WorkoutExercise;variants:Variant[];choose:(body:{variant_id:number|null}|{name:string;load_convention:'TOTAL'|'PER_HAND'})=>Promise<void>;close:()=>void}) {
+  const dialog=useRef<HTMLDialogElement>(null)
+  const [name,setName]=useState(''),[convention,setConvention]=useState<'TOTAL'|'PER_HAND'>('TOTAL'),[busy,setBusy]=useState(false),[error,setError]=useState('')
+  const pending=useRef(false)
+  useEffect(()=>{const node=dialog.current,opener=document.activeElement as HTMLElement|null;node?.showModal();return ()=>{node?.close();opener?.focus()}},[])
+  const run=async(body:Parameters<typeof choose>[0])=>{
+    if(pending.current)return
+    pending.current=true;setBusy(true);setError('')
+    try{await choose(body)}catch(err){if(err instanceof ApiError&&err.status===401)close();else setError(err instanceof Error?err.message:'No se pudo guardar la variante')}
+    finally{pending.current=false;setBusy(false)}
+  }
+  return <dialog ref={dialog} className="sheet" aria-labelledby="variant-title" onCancel={event=>{if(busy)event.preventDefault();else close()}}>
+    <div className="sheet-heading"><h2 id="variant-title">Variante del ejercicio</h2><button aria-label="Cerrar variantes" disabled={busy} onClick={close}>?</button></div>
+    <p className="muted">{item.exercise_name_snapshot}. Cada variante tiene su propio historial.</p>
+    <ErrorNotice message={error}/>
+    <div className="catalog-list"><button disabled={busy} onClick={()=>run({variant_id:null})}>Original ? {item.exercise_name_snapshot}</button>{variants.map(variant=><button key={variant.id} disabled={busy} onClick={()=>run({variant_id:variant.id})}>{variant.name}{variant.load_convention==='PER_HAND'?' ? Por mano':''}</button>)}</div>
+    <form className="custom-exercise" onSubmit={event=>{event.preventDefault();run({name,load_convention:convention})}}>
+      <h3>Nueva variante</h3>
+      <label className="field"><span>Nombre de la variante</span><input required maxLength={100} placeholder="Ej. M?quina morada" value={name} disabled={busy} onChange={event=>setName(event.target.value)}/></label>
+      <label className="field"><span>Registro de carga de la variante</span><select value={convention} disabled={busy} onChange={event=>setConvention(event.target.value as 'TOTAL'|'PER_HAND')}><option value="TOTAL">Peso que ingreses (total o indicado en m?quina)</option><option value="PER_HAND">Peso por mano</option></select></label>
+      <button className="primary" disabled={busy||!name.trim()}>{busy?'Guardando?':'Crear y usar variante'}</button>
+    </form>
+    <button className="sheet-close" disabled={busy} onClick={close}>Volver al entrenamiento</button>
+  </dialog>
+}
+
 function Session({ workout, history, refresh, finish, cancelWorkout, error, browse, lifecycleBusy }:{ workout:Workout; history:Workout[]; refresh:() => Promise<void>; finish:() => void; cancelWorkout:() => void; error:string; browse:()=>void; lifecycleBusy:boolean }) {
   const [draft]=useState(()=>readDraft(workout.id))
   const [selectedExerciseId,setSelectedExerciseId]=useState<number|undefined>(draft.selectedExerciseId)
   const orderedExercises=[...workout.exercises].sort((a,b)=>a.position-b.position)
   const selectedExercise=orderedExercises.find(item=>item.id===selectedExerciseId)||orderedExercises[0]
   const selectedIndex=selectedExercise?orderedExercises.findIndex(item=>item.id===selectedExercise.id):-1
-  const selectedRecords=useMemo(()=>recentExerciseRecords(history,selectedExercise?.exercise_id),[history,selectedExercise?.exercise_id])
+  const selectedRecords=useMemo(()=>recentExerciseRecords(history,selectedExercise?.exercise_id??null,2,selectedExercise?.variant_id??null),[history,selectedExercise?.exercise_id,selectedExercise?.variant_id])
   const [weights, setWeights] = useState<Record<number,string>>(draft.weights||{}), [weightTypes, setWeightTypes] = useState<Record<number,WeightType>>(draft.weightTypes||{}), [reps, setReps] = useState<Record<number,string>>(draft.repsById || (draft.reps && workout.exercises[0]?{[workout.exercises[0].id]:draft.reps}:{})), [warm, setWarm] = useState<Record<number,boolean>>(draft.warmsById || (draft.warm && workout.exercises[0]?{[workout.exercises[0].id]:true}:{})), [adding, setAdding] = useState(false), [catalog, setCatalog] = useState<Exercise[]>([]), [catalogError, setCatalogError] = useState('')
   const now=useWallClock()
   const loadCatalog = () => { setCatalogError(''); api('/exercises').then(setCatalog).catch((err:any)=>setCatalogError(err.message)) }
@@ -289,10 +317,18 @@ function Session({ workout, history, refresh, finish, cancelWorkout, error, brow
   const [customDraft,setCustomDraft]=useState<ExerciseDraft>(draft.customDraft||{name:'',convention:'TOTAL'})
   useEffect(()=>{saveDraft(workout.id,{selectedExerciseId:selectedExercise?.id,weights,weightTypes,repsById:reps,warmsById:warm,customDraft})},[workout.id,selectedExercise?.id,weights,weightTypes,reps,warm,customDraft])
   const exercise = (item:WorkoutExercise) => catalog.find(entry => entry.id === item.exercise_id)
-  const convention = (item:WorkoutExercise) => exercise(item)?.load_convention === 'PER_HAND' ? 'lb por mano' : 'lb totales'
+  const convention = (item:WorkoutExercise) => (item.variant_load_convention_snapshot??exercise(item)?.load_convention) === 'PER_HAND' ? 'lb por mano' : item.variant_id?'lb':'lb totales'
   const typeFor = (item:WorkoutExercise):WeightType => weightTypes[item.id] || 'EXTERNAL'
   const inFlight=useRef(false),[busy,setBusy]=useState(false),[actionError,setActionError]=useState(''),[editing,setEditing]=useState<EditDraft|null>(null),[editVisible,setEditVisible]=useState(false)
-  const locked=busy||lifecycleBusy
+  const [variantOpen,setVariantOpen]=useState(false)
+  const locked=busy||lifecycleBusy||variantOpen
+  const chooseVariant=async(body:{variant_id:number|null}|{name:string;load_convention:'TOTAL'|'PER_HAND'})=>{
+    if(!selectedExercise)return
+    const item=selectedExercise
+    await api(`/workout-exercises/${item.id}/variant`,{method:'PUT',body:JSON.stringify(body)})
+    setWeights(current=>({...current,[item.id]:''}));setReps(current=>({...current,[item.id]:''}));setWeightTypes(current=>({...current,[item.id]:'EXTERNAL'}));setWarm(current=>({...current,[item.id]:false}))
+    await refresh();loadCatalog();setVariantOpen(false)
+  }
   const run=async(action:()=>Promise<void>)=>{
     if(inFlight.current||lifecycleBusy)return
     inFlight.current=true;setBusy(true);setActionError('')
@@ -332,10 +368,11 @@ function Session({ workout, history, refresh, finish, cancelWorkout, error, brow
       <div className="section-heading"><h2>Entrenamiento</h2><span className="eyebrow">{workout.routine.name}</span></div>
       {selectedExercise?<div className="exercise-switcher">
         <p className="exercise-step" role="status">Ejercicio {selectedIndex+1} de {orderedExercises.length}</p>
-        <div className="exercise-switcher-controls"><button aria-label="Ejercicio anterior" disabled={locked||selectedIndex===0} onClick={()=>setSelectedExerciseId(orderedExercises[selectedIndex-1].id)}>←</button><label><span>Ejercicio actual</span><select aria-label="Ejercicio actual" value={selectedExercise.id} disabled={locked} onChange={event=>setSelectedExerciseId(Number(event.target.value))}>{orderedExercises.map(item=><option key={item.id} value={item.id}>{item.position}. {item.exercise_name_snapshot}{item.skipped?' · Omitido':''}</option>)}</select></label><button aria-label="Ejercicio siguiente" disabled={locked||selectedIndex===orderedExercises.length-1} onClick={()=>setSelectedExerciseId(orderedExercises[selectedIndex+1].id)}>→</button></div>
+        <div className="exercise-switcher-controls"><button aria-label="Ejercicio anterior" disabled={locked||selectedIndex===0} onClick={()=>setSelectedExerciseId(orderedExercises[selectedIndex-1].id)}>←</button><label><span>Ejercicio actual</span><select aria-label="Ejercicio actual" value={selectedExercise.id} disabled={locked} onChange={event=>setSelectedExerciseId(Number(event.target.value))}>{orderedExercises.map(item=><option key={item.id} value={item.id}>{item.position}. {exerciseLabel(item)}{item.skipped?' · Omitido':''}</option>)}</select></label><button aria-label="Ejercicio siguiente" disabled={locked||selectedIndex===orderedExercises.length-1} onClick={()=>setSelectedExerciseId(orderedExercises[selectedIndex+1].id)}>→</button></div>
       </div>:<div className="empty-state session-empty"><h3>Empieza con un ejercicio</h3><p>Agrega uno para registrar tus series y consultar su historial.</p></div>}
       <div className="session">{(selectedExercise?[selectedExercise]:[]).map(item=> { const records=selectedRecords, type=typeFor(item); return <div className="exercise-group" key={item.id}><section className={'exercise-card '+(item.skipped ? 'skip' : '')}><fieldset className="exercise-fields" disabled={locked}>
         <div className="exercise-heading"><span className="exercise-number">{String(item.position).padStart(2,'0')}</span><h2>{item.exercise_name_snapshot}</h2></div>
+        <div className="variant-choice"><span>Variante: <b>{item.variant_name_snapshot||'Original'}</b></span><button disabled={locked||item.sets.length>0||!exercise(item)} onClick={()=>setVariantOpen(true)}>Elegir variante</button>{item.sets.length>0&&<small>La variante queda fija mientras haya series registradas.</small>}</div>
         <div className="exercise-toolbar"><span className="badge">{item.skipped ? 'Omitido' : item.sets.length+' series'}</span><div className="exercise-actions"><label className="exercise-order"><span>Orden</span><select aria-label="Posición del ejercicio" value={item.position} onChange={event=>move(item,Number(event.target.value))}>{orderedExercises.map((entry,index)=><option key={entry.id} value={index+1}>{index+1}</option>)}</select></label><button onClick={()=>toggle(item)}>{item.skipped ? 'Reanudar' : 'Saltar'}</button></div></div>
         {!item.skipped && <>
           <div className="sets">{item.sets.map(set=><div className="set-row" key={set.id}><span className="set-number">{String(set.position).padStart(2,'0')}</span><span className="set-value">{referenceSetLabel(set)}<small>{set.set_type==='WARMUP' ? 'Calentamiento' : 'Trabajo'}</small></span><div className="set-actions"><button aria-label={'Editar serie '+set.position+' de '+item.exercise_name_snapshot} onClick={()=>editSet(set)}>Editar</button><button className="icon-danger" aria-label={'Eliminar serie '+set.position+' de '+item.exercise_name_snapshot} onClick={()=>deleteSet(set)}>×</button></div></div>)}</div>
@@ -346,11 +383,12 @@ function Session({ workout, history, refresh, finish, cancelWorkout, error, brow
           </div>
           <div className="record-row"><label className="checkbox-label"><input type="checkbox" checked={warm[item.id]||false} onChange={event=>setWarm({...warm,[item.id]:event.target.checked})} />Calentamiento</label><button className="record" disabled={locked || !reps[item.id]} onClick={()=>add(item)}>＋ Registrar serie</button></div>
         </>}
-      </fieldset></section>{!item.skipped&&<ExerciseHistory name={item.exercise_name_snapshot} records={records}/>}</div> })}</div>
+      </fieldset></section>{!item.skipped&&<ExerciseHistory name={exerciseLabel(item)} records={records}/>}</div> })}</div>
       {catalogError&&<div className="catalog-error"><ErrorNotice message={'No se pudo cargar el catálogo: '+catalogError}/><button onClick={loadCatalog}>Reintentar catálogo</button></div>}
       <button disabled={locked} className="add" onClick={()=>setAdding(true)} aria-haspopup="dialog">＋ Agregar o sustituir ejercicio</button>
     </div>
     {editing && editVisible && <SetEditor draft={editing} change={setEditing} save={saveSet} close={()=>{setEditing(null);setEditVisible(false)}} suspend={()=>setEditVisible(false)}/>}
+    {variantOpen && selectedExercise && <VariantPicker item={selectedExercise} variants={exercise(selectedExercise)?.variants||[]} choose={chooseVariant} close={()=>setVariantOpen(false)}/>}
     {adding && <ExercisePicker catalog={catalog} choose={addExercise} custom={workout.routine.name==='FREE'?addCustomExercise:undefined} draft={customDraft} setDraft={setCustomDraft} close={()=>setAdding(false)} />}
   </main>
 }
