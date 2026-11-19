@@ -232,3 +232,5 @@ main{padding-bottom:112px}
 .continuity-tools{padding-bottom:calc(96px + env(safe-area-inset-bottom))}
 @media(max-width:360px){.exercise-switcher{padding:12px}.exercise-switcher-controls{gap:6px}.exercise-switcher select{font-size:12px}.exercise-order{gap:5px}}
 @media(max-width:600px){.workout-page .header-actions{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.workout-page .header-actions button{font-size:12px;padding:10px;min-height:48px}.workout-page .session-title .eyebrow{margin-bottom:6px}}
+.session-auto-notice{max-width:1128px;margin:16px auto;padding:16px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;background:var(--panel);border:1px solid var(--border);border-radius:12px}
+.session-auto-notice span{flex:1;min-width:180px}

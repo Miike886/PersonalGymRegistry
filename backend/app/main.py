@@ -12,6 +12,35 @@ from .auth import require_owner, router as auth_router
 from .models import Exercise, Routine, RoutineExercise, Workout, WorkoutExercise, WorkoutSet
 from .schemas import (ExerciseOut, RoutineOut, SetCreate, SetOut, SetUpdate, WorkoutCreate, WorkoutExerciseCreate, WorkoutExerciseOut, WorkoutExerciseUpdate, WorkoutOut)
 
+WORKOUT_MAX_AGE = timedelta(hours=5)
+
+def utc_now():
+    return datetime.now(timezone.utc)
+
+def as_utc(value: datetime):
+    return value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value.astimezone(timezone.utc)
+
+def close_workout(db: Session, workout: Workout):
+    latest = db.scalar(select(func.max(WorkoutSet.created_at)).join(WorkoutExercise).where(WorkoutExercise.workout_id == workout.id))
+    started = as_utc(workout.started_at)
+    workout.ended_at = max(started, min(as_utc(latest), utc_now())) if latest else started
+    workout.rest_until = None
+
+def close_if_expired(db: Session, workout: Workout):
+    if workout.ended_at is None and utc_now() >= as_utc(workout.started_at) + WORKOUT_MAX_AGE:
+        close_workout(db, workout)
+        # Persist the automatic close even when the attempted mutation returns 409.
+        db.commit()
+        return True
+    return False
+
+def expire_active_workout(db: Session):
+    workout = db.scalar(select(Workout).where(
+        Workout.ended_at.is_(None), Workout.started_at <= utc_now() - WORKOUT_MAX_AGE,
+    ).with_for_update().execution_options(populate_existing=True))
+    if workout is not None:
+        close_if_expired(db, workout)
+
 def detail_options():
     return (joinedload(Workout.routine).joinedload(Routine.exercises).joinedload(RoutineExercise.exercise), joinedload(Workout.exercises).joinedload(WorkoutExercise.sets))
 
@@ -25,6 +54,8 @@ def locked_workout(db: Session, workout_id: int, active: bool = True):
     workout = db.scalar(select(Workout).where(Workout.id == workout_id).with_for_update().execution_options(populate_existing=True))
     if workout is None:
         raise HTTPException(404, "Workout no encontrado")
+    if active and close_if_expired(db, workout):
+        raise HTTPException(409, "La sesión se finalizó automáticamente al alcanzar las 5 horas")
     if active and workout.ended_at is not None:
         raise HTTPException(409, "El historial es de solo lectura")
     return workout
@@ -100,10 +131,12 @@ def exercises(db: Session = Depends(get_db)):
 
 @app.get("/routines/{routine_id}/last-workout", response_model=WorkoutOut | None)
 def last_workout(routine_id: int, db: Session = Depends(get_db)):
+    expire_active_workout(db)
     return db.execute(select(Workout).where(Workout.routine_id == routine_id, Workout.ended_at.is_not(None)).options(*detail_options()).order_by(Workout.ended_at.desc())).unique().scalars().first()
 
 @app.get("/routines/{routine_id}/recent-workouts", response_model=list[WorkoutOut])
 def recent_workouts(routine_id: int, limit: int = Query(default=2, ge=1, le=10), db: Session = Depends(get_db)):
+    expire_active_workout(db)
     return db.execute(
         select(Workout)
         .where(Workout.routine_id == routine_id, Workout.ended_at.is_not(None))
@@ -114,10 +147,12 @@ def recent_workouts(routine_id: int, limit: int = Query(default=2, ge=1, le=10),
 
 @app.get("/workouts/active", response_model=WorkoutOut | None)
 def active_workout(db: Session = Depends(get_db)):
+    expire_active_workout(db)
     return db.execute(select(Workout).where(Workout.ended_at.is_(None)).options(*detail_options())).unique().scalar_one_or_none()
 
 @app.post("/workouts", response_model=WorkoutOut, status_code=status.HTTP_201_CREATED)
 def create_workout(body: WorkoutCreate, db: Session = Depends(get_db)):
+    expire_active_workout(db)
     if db.scalar(select(Workout.id).where(Workout.ended_at.is_(None))): raise HTTPException(409, "Ya existe una sesión activa")
     routine = db.get(Routine, body.routine_id)
     if not routine: raise HTTPException(404, "Rutina no encontrada")
@@ -137,10 +172,13 @@ def create_workout(body: WorkoutCreate, db: Session = Depends(get_db)):
 
 @app.get("/workouts", response_model=list[WorkoutOut])
 def workouts(db: Session = Depends(get_db)):
+    expire_active_workout(db)
     return db.execute(select(Workout).where(Workout.ended_at.is_not(None)).options(*detail_options()).order_by(Workout.ended_at.desc())).unique().scalars().all()
 
 @app.get("/workouts/{workout_id}", response_model=WorkoutOut)
-def get_workout(workout_id: int, db: Session = Depends(get_db)): return workout_or_404(db, workout_id)
+def get_workout(workout_id: int, db: Session = Depends(get_db)):
+    expire_active_workout(db)
+    return workout_or_404(db, workout_id)
 
 @app.delete("/workouts/{workout_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_workout(workout_id: int, db: Session = Depends(get_db)):
@@ -208,5 +246,8 @@ def delete_set(set_id:int, db:Session=Depends(get_db)):
 
 @app.post("/workouts/{workout_id}/finish", response_model=WorkoutOut)
 def finish(workout_id:int, db:Session=Depends(get_db)):
-    workout=locked_workout(db,workout_id)
-    workout.ended_at=datetime.now(timezone.utc); workout.rest_until=None; db.commit(); return workout_or_404(db,workout_id)
+    workout=locked_workout(db,workout_id,active=False)
+    if workout.ended_at is None:
+        close_workout(db,workout)
+        db.commit()
+    return workout_or_404(db,workout_id)

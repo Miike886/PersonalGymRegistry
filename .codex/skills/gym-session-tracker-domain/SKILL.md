@@ -11,7 +11,8 @@ Use this skill whenever a change affects the Gym Session Tracker domain model, A
 
 ## Domain invariants
 
-- A `Workout` is active exactly when `ended_at` is `null`. There may be at most one active workout across the application. Closing the PWA never finishes it; finishing is always explicit.
+- A `Workout` is active exactly when `ended_at` is `null`. There may be at most one active workout. Sessions expire five hours after starting; the server persists closure on the next workout read/create or active mutation, under the workout lock. Closing the PWA alone never finishes a session before that limit.
+- Manual and automatic finish use the latest retained set's creation timestamp, including warmups, as `ended_at`; an empty session ends at `started_at` with zero duration. Finish clears rest, is idempotent, and never recalculates completed history. Expired sessions reject further active mutations even if the attempted write itself first triggers their closure.
 - Cancelling an active workout permanently deletes it and its recorded sets instead of adding it to completed history. Deleting a completed workout also removes its historical snapshot and must be an explicit, confirmed action.
 - A workout belongs to one `Routine`: `PUSH`, `PULL`, `LEGS`, or `FREE`. `FREE` begins without preloaded exercises.
 - Active FREE sessions may create named catalog exercises with a total/per-hand convention; names are normalized and copied into immutable session snapshots. Creation never changes a routine template.
