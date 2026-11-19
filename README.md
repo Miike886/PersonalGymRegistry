@@ -1,6 +1,6 @@
 # Gym Session Tracker
 
-Aplicación móvil para registrar entrenamientos personales. La API es la fuente de verdad: una sesión activa persiste al cerrar la PWA hasta que se finaliza explícitamente.
+Aplicación móvil para registrar entrenamientos personales. La API es la fuente de verdad: una sesión activa persiste al cerrar la PWA y caduca a las cinco horas de iniciarla. El cierre manual o automático usa la hora de la última serie guardada; sin series, la duración es cero.
 
 ## Inicio local
 

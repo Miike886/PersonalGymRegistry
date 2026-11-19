@@ -1,6 +1,6 @@
 """Real PostgreSQL locks, using a dedicated local test database and disposable schemas."""
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import os
 from pathlib import Path
 from threading import Event
@@ -25,7 +25,7 @@ from alembic import command
 from alembic.config import Config
 from fastapi import HTTPException
 from app.config import settings
-from app.main import add_set, create_workout, locked_workout
+from app.main import active_workout as read_active_workout, add_set, as_utc, create_workout, locked_workout
 from app.models import Exercise, Routine, RoutineExercise, Workout, WorkoutSet
 from app.schemas import SetCreate, WorkoutCreate
 
@@ -172,3 +172,57 @@ def test_simultaneous_workout_creation_returns_conflict_and_one_active(sessions)
     assert run_competing_commits(sessions, operation) == (201, 409)
     with sessions() as db:
         assert db.scalar(select(func.count()).select_from(Workout).where(Workout.ended_at.is_(None))) == 1
+
+
+def test_expiry_rejects_waiting_set_even_with_stale_start_time(sessions):
+    workout_id, item_id = active_workout(sessions)
+    waiting, locked = Event(), Event()
+    waiter_pid = []
+    started = datetime.now(timezone.utc)-timedelta(hours=6)
+    latest = started+timedelta(minutes=90)
+    with sessions() as holder, ThreadPoolExecutor(max_workers=1) as pool:
+        holder_pid = holder.scalar(text("SELECT pg_backend_pid()"))
+        def contender():
+            with sessions() as db:
+                cached = db.get(Workout, workout_id)
+                assert cached.ended_at is None
+                waiter_pid.append(db.scalar(text("SELECT pg_backend_pid()")))
+                waiting.set()
+                assert locked.wait(5)
+                try:
+                    add_set(item_id, SetCreate(reps=99), db)
+                except HTTPException as error:
+                    return error.status_code
+                return 201
+        future = pool.submit(contender)
+        try:
+            assert waiting.wait(5)
+            workout = locked_workout(holder, workout_id)
+            workout.started_at = started
+            holder.add(WorkoutSet(workout_exercise_id=item_id, position=1, reps=8, created_at=latest))
+            holder.flush()
+            locked.set()
+            assert_blocked(sessions, waiter_pid[0], holder_pid)
+            holder.commit()
+            assert future.result(timeout=10) == 409
+        finally:
+            holder.rollback()
+            locked.set()
+    with sessions() as db:
+        workout = db.get(Workout, workout_id)
+        assert as_utc(workout.ended_at) == latest
+        assert workout.rest_until is None
+        assert db.scalar(select(func.count()).select_from(WorkoutSet)) == 1
+
+
+def test_simultaneous_timeout_reads_close_once(sessions):
+    workout_id, item_id = active_workout(sessions)
+    started = datetime.now(timezone.utc)-timedelta(days=1)
+    latest = started+timedelta(hours=1)
+    with sessions() as db:
+        db.get(Workout, workout_id).started_at = started
+        db.add(WorkoutSet(workout_exercise_id=item_id, position=1, reps=8, created_at=latest))
+        db.commit()
+    assert run_competing_commits(sessions, lambda db: read_active_workout(db)) == (None, None)
+    with sessions() as db:
+        assert as_utc(db.get(Workout, workout_id).ended_at) == latest

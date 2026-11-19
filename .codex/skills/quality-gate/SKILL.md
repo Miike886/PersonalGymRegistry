@@ -15,7 +15,7 @@ Read the corresponding `features/<feature-slug>.md`, the pull request descriptio
 
 For changes affecting workouts, routines, exercises, sets, weights, or history, read `.codex/skills/gym-session-tracker-domain/SKILL.md` before judging the implementation. Check in particular that:
 
-- only one workout can be active, finishing it is explicit, and in-progress sessions do not appear as completed history;
+- only one workout can be active, manual finish and automatic five-hour expiry follow the domain's last-recorded-set rule, and sessions still in progress do not appear as completed history;
 - routine and exercise choices are copied into the session so historical records remain snapshots;
 - session and set ordering are preserved, and weights/repetitions use the established units and validation;
 - an intended backend invariant is not silently made a frontend-only rule.

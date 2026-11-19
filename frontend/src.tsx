@@ -7,6 +7,7 @@ import { AttendanceCalendar } from './attendance'
 import { clearDrafts, readDraft, saveDraft, useWallClock, FloatingTimer } from './session-continuity'
 import { recentExerciseRecords, type ExerciseRecordReference } from './recent-exercise-records'
 import { referenceSetLabel } from './set-label'
+import { sessionDeadline, sessionSeconds } from './workout-time'
 
 const API = '/api'
 type WeightType = 'EXTERNAL'|'BODYWEIGHT'|'BODYWEIGHT_PLUS'|'BODYWEIGHT_ASSISTED'
@@ -139,6 +140,8 @@ function WorkoutApp({authVersion}:{authVersion:number}) {
   const [returnView,setReturnView]=useState<Exclude<AppView,'session'>>('home')
   const [active, setActive] = useState<Workout|null>(null), [routines, setRoutines] = useState<any[]>([]), [history, setHistory] = useState<Workout[]>([]), [selected, setSelected] = useState<Workout|null>(null), [view, setView] = useState<AppView>('home'), [error, setError] = useState(''), [loadingDetail, setLoadingDetail] = useState(false)
   const [lifecycleBusy,setLifecycleBusy]=useState(false)
+  const [sessionNotice,setSessionNotice]=useState('')
+  const knownActive=useRef<number|null>(null)
   const detailVersion=useRef(0)
   const navigate=(next:AppView)=>{detailVersion.current++;setLoadingDetail(false);setView(next)}
   useEffect(()=>()=>{detailVersion.current++},[])
@@ -147,14 +150,32 @@ function WorkoutApp({authVersion}:{authVersion:number}) {
     if(mutating.current)return
     const expected=++loadVersion.current
     try {
-      const [current,nextRoutines,nextHistory]=await Promise.all([api('/workouts/active'),api('/routines'),api('/workouts')])
+      let current=await api('/workouts/active')
+      const [nextRoutines,nextHistory]=await Promise.all([api('/routines'),api('/workouts')])
+      // History must be read after the active check can persist an automatic close.
+      if(current && nextHistory.some((workout:Workout)=>workout.id===current.id))current=null
       if(expected!==loadVersion.current || mutating.current)return
+      if(knownActive.current!==null && current===null){
+        clearDrafts(knownActive.current)
+        setSessionNotice('La sesión se finalizó. La duración termina en la última serie guardada; sin series, es cero.')
+        setView(previous=>previous==='session'?'history':previous)
+      }
+      if(current===null)clearDrafts()
+      knownActive.current=current?.id??null
       setError('');setActive(current);setRoutines(nextRoutines);setHistory(nextHistory)
       if(initialLoad.current){setView(current?'session':'home');initialLoad.current=false}
     }catch(err){if(expected===loadVersion.current)setError(err instanceof Error?err.message:'No se pudo cargar la sesión')}
   }
   useEffect(() => { load() }, [authVersion])
   useEffect(()=>{const resume=()=>{if(document.visibilityState==='visible')load()};window.addEventListener('focus',resume);window.addEventListener('pageshow',resume);document.addEventListener('visibilitychange',resume);return()=>{loadVersion.current++;window.removeEventListener('focus',resume);window.removeEventListener('pageshow',resume);document.removeEventListener('visibilitychange',resume)}},[])
+  const deadline=active?sessionDeadline(active):null
+  useEffect(()=>{
+    if(deadline===null)return
+    const check=()=>{if(Date.now()>=deadline)void load()}
+    const timer=window.setTimeout(check,Math.max(0,deadline-Date.now()))
+    const retry=window.setInterval(check,30000)
+    return()=>{clearTimeout(timer);clearInterval(retry)}
+  },[deadline])
   const mutate=async(action:()=>Promise<void>)=>{
     if(mutating.current)return
     mutating.current=true;setLifecycleBusy(true);loadVersion.current++;detailVersion.current++;setLoadingDetail(false);setError('')
@@ -162,10 +183,10 @@ function WorkoutApp({authVersion}:{authVersion:number}) {
     try{await action()}catch(err){failure=err instanceof Error?err.message:'No se pudo guardar el cambio'}
     finally{mutating.current=false;await load();setLifecycleBusy(false);if(failure)setError(failure)}
   }
-  const start = (routineId:number) => mutate(async()=>{setActive(await api('/workouts',{method:'POST',body:JSON.stringify({routine_id:routineId})}));setReturnView('home');navigate('session')})
+  const start = (routineId:number) => mutate(async()=>{const next=await api('/workouts',{method:'POST',body:JSON.stringify({routine_id:routineId})});knownActive.current=next.id;setSessionNotice('');setActive(next);setReturnView('home');navigate('session')})
   const resumeSession=()=>{if(view!=='session'){setReturnView(view);navigate('session')}}
-  const finish = () => {if(active && confirm('¿Finalizar entrenamiento?'))mutate(async()=>{await api(`/workouts/${active.id}/finish`,{method:'POST'});clearDrafts(active.id);setActive(null);navigate('history')})}
-  const cancelWorkout = () => {if(active && confirm('¿Cancelar este entrenamiento? Se eliminarán todas las series registradas.'))mutate(async()=>{await api(`/workouts/${active.id}`,{method:'DELETE'});clearDrafts(active.id);setActive(null);navigate('home')})}
+  const finish = () => {if(active && confirm('¿Finalizar entrenamiento? La duración termina en la última serie guardada.'))mutate(async()=>{await api(`/workouts/${active.id}/finish`,{method:'POST'});clearDrafts(active.id);knownActive.current=null;setActive(null);navigate('history')})}
+  const cancelWorkout = () => {if(active && confirm('¿Cancelar este entrenamiento? Se eliminarán todas las series registradas.'))mutate(async()=>{await api(`/workouts/${active.id}`,{method:'DELETE'});clearDrafts(active.id);knownActive.current=null;setActive(null);navigate('home')})}
   const deleteWorkout = async (workout:Workout) => {if(confirm('¿Eliminar este entrenamiento del historial? Esta acción no se puede deshacer.'))await mutate(async()=>{await api(`/workouts/${workout.id}`,{method:'DELETE'});setSelected(null);navigate('history')})}
   const openDetail = async (workoutId:number) => {
     if(mutating.current)return
@@ -175,7 +196,7 @@ function WorkoutApp({authVersion}:{authVersion:number}) {
     finally{if(expected===detailVersion.current)setLoadingDetail(false)}
   }
 
-  return <><div className={active ? 'browsing-active' : ''} hidden={view==='session'}>{view==='detail' && selected ? <WorkoutDetail workout={selected} back={()=>navigate('history')} deleteWorkout={deleteWorkout} error={error} busy={lifecycleBusy}/> : <main>
+  return <>{sessionNotice&&<aside className="session-auto-notice" role="status"><span>{sessionNotice}</span><button onClick={()=>setSessionNotice('')}>Cerrar aviso</button></aside>}<div className={active ? 'browsing-active' : ''} hidden={view==='session'}>{view==='detail' && selected ? <WorkoutDetail workout={selected} back={()=>navigate('history')} deleteWorkout={deleteWorkout} error={error} busy={lifecycleBusy}/> : <main>
     <header className="topbar"><Brand /></header>
     <ErrorNotice message={error} />
     <div className="view-title"><h1>{view==='home'?'Entrenar':view==='history'?'Historial':view==='progress'?'Progreso':'Ajustes'}</h1></div>
@@ -206,7 +227,7 @@ function WorkoutApp({authVersion}:{authVersion:number}) {
 function ActiveSessionBar({workout,resume}:{workout:Workout;resume:()=>void}) {
   const now=useWallClock()
   const rest=workout.rest_until?Math.max(0,Math.ceil((timestamp(workout.rest_until)-now)/1000)):0
-  const elapsed=Math.max(0,Math.floor((now-timestamp(workout.started_at))/1000))
+  const elapsed=sessionSeconds(workout,now)
   return <button className="resume-session" onClick={resume}><span className="resume-label"><b>Retomar {workout.routine.name}</b><small>Entrenamiento en curso ↗</small></span><span className="session-bar-time"><small>{rest>0?'Descanso':'Tiempo de sesión'}</small><b role="timer" aria-label={rest>0?'Descanso pendiente':'Tiempo de sesión en navegación'}>{rest>0?`${Math.floor(rest/60)}:${String(rest%60).padStart(2,'0')}`:clock(elapsed)}</b></span></button>
 }
 
@@ -292,7 +313,8 @@ function Session({ workout, history, refresh, finish, cancelWorkout, error, brow
   const convention = (item:WorkoutExercise) => exercise(item)?.load_convention === 'PER_HAND' ? 'lb por mano' : 'lb totales'
   const typeFor = (item:WorkoutExercise):WeightType => weightTypes[item.id] || 'EXTERNAL'
   const inFlight=useRef(false),[busy,setBusy]=useState(false),[actionError,setActionError]=useState(''),[editing,setEditing]=useState<EditDraft|null>(null),[editVisible,setEditVisible]=useState(false)
-  const locked=busy||lifecycleBusy
+  const expired=now>=sessionDeadline(workout)
+  const locked=busy||lifecycleBusy||expired
   const run=async(action:()=>Promise<void>)=>{
     if(inFlight.current||lifecycleBusy)return
     inFlight.current=true;setBusy(true);setActionError('')
@@ -318,13 +340,15 @@ function Session({ workout, history, refresh, finish, cancelWorkout, error, brow
     setCustomDraft({name:'',convention:'TOTAL'});await refresh();setSelectedExerciseId(item.id);setAdding(false)
   }
   const seconds = workout.rest_until ? Math.max(0, Math.ceil((timestamp(workout.rest_until) - now) / 1000)) : 0
-  const elapsed = Math.max(0,Math.floor((now-timestamp(workout.started_at))/1000))
+  const elapsed = sessionSeconds(workout,now)
   const skipRest = ()=>run(async()=>{await api(`/workouts/${workout.id}/rest/skip`,{method:'POST'});await refresh()})
 
   return <main className="workout-page">
     <header className="topbar workout-topbar"><div className="session-heading-navigation"><button className="session-back" onClick={browse} aria-label="Volver a la aplicación"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg><span>Volver</span></button><Brand /></div><span className="live-badge"><i /> SESIÓN EN CURSO</span></header>
     <div className="session-title"><div><h1>{routineInfo[workout.routine.name]?.title || workout.routine.name}</h1><div className="session-metrics"><span role="timer" aria-label="Tiempo de sesión">{clock(elapsed)}</span><span>{workout.exercises.length} ejercicios</span><span>{workout.exercises.reduce((total,item)=>total+item.sets.length,0)} series registradas</span></div></div><div className="header-actions"><button disabled={locked} onClick={finish} className="primary">Finalizar sesión ↗</button><button disabled={locked} onClick={cancelWorkout} className="cancel-workout">Cancelar entrenamiento</button></div></div>
     <ErrorNotice message={error || actionError} />
+    <p className="muted">Al finalizar se usa la hora de tu última serie. La sesión se cierra automáticamente a las 5 horas de iniciarla.</p>
+    {expired&&<div role="status"><p>Esta sesión alcanzó las 5 horas. Actualiza para consultar su cierre.</p><button disabled={busy||lifecycleBusy} onClick={()=>refresh()}>Actualizar sesión</button></div>}
     {editing && !editVisible && <button onClick={()=>setEditVisible(true)}>Continuar edición de serie</button>}
     {busy && <p role="status" className="muted">Guardando cambio…</p>}
     {seconds > 0 && <div className="rest-timer" role="timer" aria-label="Tiempo de descanso restante"><div><b>Descanso</b></div><span className="rest-clock">{Math.floor(seconds/60)}:{String(seconds%60).padStart(2,'0')}</span><button disabled={locked} onClick={skipRest}>Omitir descanso</button><div className="rest-track" aria-hidden="true"><span style={{width:(seconds/165*100)+'%'}} /></div></div>}

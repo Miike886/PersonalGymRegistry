@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { sessionSeconds } from './workout-time'
 
 const prefix='gym:session-draft:'
 export function clearDrafts(id?:number) {
@@ -32,7 +33,7 @@ export function useWallClock() {
 type PiPWindow=Window & {documentPictureInPicture?:{requestWindow:(options:{width:number;height:number})=>Promise<Window>}}
 function time(value:string) {return Date.parse(/(?:Z|[+-]\d{2}:\d{2})$/.test(value)?value:value+'Z')}
 function clock(value:number) {return [Math.floor(value/3600),Math.floor(value/60)%60,value%60].map(v=>String(v).padStart(2,'0')).join(':')}
-export function FloatingTimer({workout}:{workout:{started_at:string;rest_until:string|null;routine:{name:string}}}) {
+export function FloatingTimer({workout}:{workout:{started_at:string;rest_until:string|null;routine:{name:string};exercises:{sets:{created_at:string}[]}[]}}) {
   const now=useWallClock(),[popup,setPopup]=useState<Window|null>(null),[error,setError]=useState('')
   const opened=useRef<Window|null>(null)
   const generation=useRef(0)
@@ -60,6 +61,6 @@ export function FloatingTimer({workout}:{workout:{started_at:string;rest_until:s
       {supported?<button onClick={open}>↗ Temporizador en ventana flotante</button>:<small>El tiempo se conserva al cambiar de aplicación. Este navegador no permite superponer este reloj fuera de la app.</small>}
       {error && <p role="alert">{error}</p>}
     </aside>
-    {popup && createPortal(<section aria-label="Temporizador flotante"><small>{workout.routine.name} · {rest?'DESCANSO':'TIEMPO DE SESIÓN'}</small><strong role="timer">{clock(rest || Math.max(0,Math.floor((now-time(workout.started_at))/1000)))}</strong><button onClick={()=>popup.close()}>Cerrar ventana</button></section>,popup.document.body)}
+    {popup && createPortal(<section aria-label="Temporizador flotante"><small>{workout.routine.name} · {rest?'DESCANSO':'TIEMPO DE SESIÓN'}</small><strong role="timer">{clock(rest || sessionSeconds(workout,now))}</strong><button onClick={()=>popup.close()}>Cerrar ventana</button></section>,popup.document.body)}
   </>
 }
