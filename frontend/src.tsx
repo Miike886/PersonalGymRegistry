@@ -150,7 +150,10 @@ function WorkoutApp({authVersion}:{authVersion:number}) {
     if(mutating.current)return
     const expected=++loadVersion.current
     try {
-      const [current,nextRoutines,nextHistory]=await Promise.all([api('/workouts/active'),api('/routines'),api('/workouts')])
+      let current=await api('/workouts/active')
+      const [nextRoutines,nextHistory]=await Promise.all([api('/routines'),api('/workouts')])
+      // History must be read after the active check can persist an automatic close.
+      if(current && nextHistory.some((workout:Workout)=>workout.id===current.id))current=null
       if(expected!==loadVersion.current || mutating.current)return
       if(knownActive.current!==null && current===null){
         clearDrafts(knownActive.current)
